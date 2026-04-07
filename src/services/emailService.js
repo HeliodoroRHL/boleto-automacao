@@ -52,16 +52,16 @@ function nomePdf(clienteNome, boletoId) {
 }
 
 // Monta HTML do email com layout e logo da empresa
-function montarHtmlEmail(body, nomePortal, temLogo, rodapeEmail) {
+function montarHtmlEmail(body, nomePortal, logoDataUri, rodapeEmail) {
   const corpoHtml = body
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>');
 
-  const logoHtml = temLogo
-    ? `<img src="cid:logo_empresa" alt="${nomePortal}" style="max-height:60px;max-width:200px;object-fit:contain;display:block">`
-    : `<span style="font-size:20px;font-weight:700;color:#2563eb">${nomePortal}</span>`;
+  const logoHtml = logoDataUri
+    ? `<img src="${logoDataUri}" alt="${nomePortal}" style="max-height:60px;max-width:200px;object-fit:contain;display:block">`
+    : `<span style="font-size:20px;font-weight:700;color:#ffffff">${nomePortal}</span>`;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -73,7 +73,7 @@ function montarHtmlEmail(body, nomePortal, temLogo, rodapeEmail) {
 
         <!-- Cabeçalho com logo -->
         <tr>
-          <td style="background:#2563eb;padding:24px 32px;text-align:left">
+          <td style="background:#0f172a;padding:20px 32px;text-align:center">
             ${logoHtml}
           </td>
         </tr>
@@ -113,18 +113,16 @@ module.exports = {
     const logoPath   = cfg.logoPath
       ? path.join(__dirname, '../../public', cfg.logoPath)
       : null;
-    const temLogo = logoPath && fs.existsSync(logoPath);
+    // Converte logo para base64 data URI (funciona em todos os clientes, inclusive Gmail)
+    let logoDataUri = null;
+    if (logoPath && fs.existsSync(logoPath)) {
+      const ext      = path.extname(logoPath).toLowerCase().replace('.', '');
+      const mime     = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      const b64      = fs.readFileSync(logoPath).toString('base64');
+      logoDataUri    = `data:${mime};base64,${b64}`;
+    }
 
     const attachments = [];
-
-    // Logo embutida como CID (funciona mesmo sem domínio público)
-    if (temLogo) {
-      attachments.push({
-        filename:    path.basename(logoPath),
-        path:        logoPath,
-        cid:         'logo_empresa',
-      });
-    }
 
     // PDF do boleto
     if (pdfBuffer) {
@@ -142,7 +140,7 @@ module.exports = {
       cc:           cc || undefined,
       subject,
       text:         body,
-      html:         montarHtmlEmail(body, nomePortal, temLogo, rodapeEmail),
+      html:         montarHtmlEmail(body, nomePortal, logoDataUri, rodapeEmail),
       textEncoding: 'base64',
       attachments,
     });
