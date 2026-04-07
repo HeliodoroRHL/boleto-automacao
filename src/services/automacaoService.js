@@ -33,32 +33,49 @@ function dataOffset(dias) {
   return d.toISOString().split('T')[0]; // YYYY-MM-DD
 }
 
+// ── Retorna o prefixo YYYY-MM do mês atual ────────────────────────────────────
+function mesAtualPrefix() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// ── Primeiro e último dia do mês atual (YYYY-MM-DD) ───────────────────────────
+function rangesMesAtual() {
+  const d = new Date();
+  const ano = d.getFullYear();
+  const mes = d.getMonth() + 1;
+  const inicio = `${ano}-${String(mes).padStart(2, '0')}-01`;
+  const fim    = `${ano}-${String(mes).padStart(2, '0')}-${new Date(ano, mes, 0).getDate().toString().padStart(2, '0')}`;
+  return { inicio, fim };
+}
+
 // ── Busca pagamentos de acordo com o tipo de gatilho ─────────────────────────
 async function buscarPagamentos(auto, apiKey) {
-  const tipos  = auto.tiposPagamento || ['BOLETO'];
-  const status = auto.statusFiltro   || 'PENDING';
-  const gatilho = auto.tipoGatilho   || 'mensal';
+  const tipos   = auto.tiposPagamento || ['BOLETO'];
+  const status  = auto.statusFiltro   || 'PENDING';
+  const gatilho = auto.tipoGatilho    || 'mensal';
 
   if (gatilho === 'dia_vencimento') {
-    // Vence hoje
+    // Vence hoje — já está no mês atual por definição
     return asaas.listarPorData({ data: dataOffset(0), billingTypes: tipos, status, apiKey });
   }
   if (gatilho === 'dias_antes') {
-    // Vence em N dias
+    // Vence em N dias — pode cruzar para o próximo mês, o filtro mensal abaixo garante
     const n = Number(auto.diasAntes) || 3;
     return asaas.listarPorData({ data: dataOffset(n), billingTypes: tipos, status, apiKey });
   }
-  // 'mensal' ou padrão: lista todos pendentes sem filtro de data
-  const axios  = require('axios');
-  const key    = apiKey || process.env.ASAAS_API_KEY;
+  // 'mensal': busca somente boletos com vencimento no mês atual
+  const { inicio, fim } = rangesMesAtual();
+  const axios = require('axios');
+  const key   = apiKey || process.env.ASAAS_API_KEY;
   if (!key || key === 'sua_chave_api_asaas') throw new Error('API Key não configurada');
-  const cli    = axios.create({
+  const cli = axios.create({
     baseURL: process.env.ASAAS_BASE_URL || 'https://api.asaas.com/v3',
     headers: { 'access_token': key },
     timeout: 20000,
   });
   const todos = await Promise.all(tipos.map(tipo =>
-    cli.get('/payments', { params: { billingType: tipo, status, limit: 100 } })
+    cli.get('/payments', { params: { billingType: tipo, status, dueDateGe: inicio, dueDateLe: fim, limit: 100 } })
       .then(r => r.data.data || []).catch(() => [])
   ));
   return todos.flat();
@@ -70,6 +87,10 @@ async function executarAutomacao(auto) {
 
   const { apiKey, emailFromOverride } = resolverConta(auto.contaId);
   let pagamentos = await buscarPagamentos(auto, apiKey);
+
+  // Garante que apenas boletos do mês atual sejam enviados (regra inviolável)
+  const prefixoMes = mesAtualPrefix();
+  pagamentos = pagamentos.filter(p => p.dueDate && p.dueDate.startsWith(prefixoMes));
 
   // Filtro por clientes específicos (se configurado)
   if (auto.clientesFiltro?.length) {
