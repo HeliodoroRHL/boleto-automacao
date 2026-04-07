@@ -178,6 +178,15 @@ async function showApp(user) {
   document.getElementById('app').hidden=false;
   const lbl=document.getElementById('user-label');
   if(lbl) lbl.textContent=esc(user.nome||user.email);
+
+  // Wire up topbar buttons (evita depender de onclick inline bloqueado pelo CSP)
+  const btnPriv    = document.getElementById('btn-privacidade');
+  const btnConta   = document.getElementById('btn-minha-conta');
+  const btnLogout  = document.getElementById('btn-logout');
+  if (btnPriv   && !btnPriv._bound)   { btnPriv.addEventListener('click', togglePrivacy);          btnPriv._bound=true; }
+  if (btnConta  && !btnConta._bound)  { btnConta.addEventListener('click', ()=>navigate('perfil')); btnConta._bound=true; }
+  if (btnLogout && !btnLogout._bound) { btnLogout.addEventListener('click', logout);                btnLogout._bound=true; }
+
   // Carrega lista de contas disponíveis
   try { state.contas=await api.contas(); } catch {}
   resetIdleTimer();

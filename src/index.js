@@ -29,11 +29,12 @@ const PORT = process.env.PORT || 3003;
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc:  ["'self'"],
-      scriptSrc:   ["'self'", "'unsafe-inline'"],   // necessário para o SPA inline
-      styleSrc:    ["'self'", "'unsafe-inline'"],
-      imgSrc:      ["'self'", 'data:'],
-      connectSrc:  ["'self'"],
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'", "'unsafe-inline'"],
+      scriptSrcAttr:  ["'unsafe-inline'"],   // permite onclick nos elementos do SPA
+      styleSrc:       ["'self'", "'unsafe-inline'"],
+      imgSrc:         ["'self'", 'data:'],
+      connectSrc:     ["'self'"],
       frameAncestors: ["'none'"],
     },
   },
