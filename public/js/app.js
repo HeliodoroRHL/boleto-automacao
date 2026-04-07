@@ -25,14 +25,15 @@ function togglePrivacy() {
 }
 function applyPrivacy() {
   document.getElementById('content').classList.toggle('privacy-on', state.privacyMode);
-  const btn    = document.getElementById('btn-privacidade');
-  const show   = document.getElementById('prv-icon-show');
-  const hide   = document.getElementById('prv-icon-hide');
+  const btn   = document.getElementById('btn-privacidade');
+  const show  = document.getElementById('prv-icon-show');
+  const hide  = document.getElementById('prv-icon-hide');
+  const label = document.getElementById('prv-label');
   if (!btn) return;
   btn.classList.toggle('ativo', state.privacyMode);
-  btn.title = state.privacyMode ? 'Mostrar valores e nomes' : 'Ocultar valores e nomes';
-  if (show) show.style.display = state.privacyMode ? 'none' : '';
-  if (hide) hide.style.display = state.privacyMode ? '' : 'none';
+  if (show)  show.style.display  = state.privacyMode ? 'none' : '';
+  if (hide)  hide.style.display  = state.privacyMode ? '' : 'none';
+  if (label) label.textContent   = state.privacyMode ? 'Mostrar dados' : 'Ocultar dados';
 }
 
 // ── Segurança ─────────────────────────────────────────────────────────────────
@@ -266,6 +267,7 @@ async function pageDashboard() {
         </div>
       </div>`;
     bindContaBar();
+    applyPrivacy();
     document.getElementById('btn-ver-todos')?.addEventListener('click', ()=>navigate('boletos'));
     document.getElementById('btn-ver-historico')?.addEventListener('click', ()=>navigate('historico'));
     document.querySelectorAll('[data-boleto]').forEach(btn=>btn.addEventListener('click',()=>navigate('email',btn.dataset.boleto)));
@@ -329,6 +331,7 @@ async function pageBoletos() {
       ${tp>1?`<div class="pagination"><span>Página ${pg} de ${tp}</span>
         <button class="btn btn-secondary btn-sm" id="btn-prev" ${state.boletosOffset===0?'disabled':''}>Anterior</button>
         <button class="btn btn-secondary btn-sm" id="btn-next" ${!lista.hasMore?'disabled':''}>Próxima</button></div>`:''}`;
+    applyPrivacy();
     document.querySelectorAll('[data-boleto]').forEach(btn=>btn.addEventListener('click',()=>navigate('email',btn.dataset.boleto)));
     document.getElementById('btn-prev')?.addEventListener('click',()=>{state.boletosOffset=Math.max(0,state.boletosOffset-20);pageBoletos();});
     document.getElementById('btn-next')?.addEventListener('click',()=>{state.boletosOffset+=20;pageBoletos();});

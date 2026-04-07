@@ -25,6 +25,17 @@ router.get('/boletos', async (req, res) => {
     const { contaId, status, offset, limit } = req.query;
     const { apiKey } = resolverConta(contaId);
     const data = await asaas.listarBoletos({ status, offset: +offset || 0, limit: +limit || 50, apiKey });
+
+    // Garante que customerName seja preenchido — às vezes o Asaas retorna nulo
+    if (data.data) {
+      await Promise.all(data.data.map(async b => {
+        if (!b.customerName && b.customer) {
+          const cli = await asaas.getCliente(b.customer, apiKey);
+          if (cli?.name) b.customerName = cli.name;
+        }
+      }));
+    }
+
     res.json(data);
   } catch (e) {
     log.error('Erro ao listar boletos', { erro: e.message });
