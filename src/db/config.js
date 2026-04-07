@@ -7,6 +7,11 @@ const DEFAULTS = {
   nomePortal:      'BoletoHub',
   logoPath:        null,
   modeloAssunto:   'Honorário - {{mes}}/{{ano}} ({{nome}})',
+  modelosAssunto:  [
+    'Honorário - {{mes}}/{{ano}} ({{nome}})',
+    'Honorário de Serviço de TI - {{mes}}/{{ano}} ({{nome}})',
+    'Honorário de TI e Backup em Nuvem - {{mes}}/{{ano}} ({{nome}})',
+  ],
 };
 
 function load() {

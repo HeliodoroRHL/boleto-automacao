@@ -34,13 +34,20 @@ router.get('/', (req, res) => {
 
 // PUT /api/config — atualiza configurações gerais
 router.put('/', (req, res) => {
-  const { nomePortal, modeloAssunto } = req.body || {};
+  const { nomePortal, modeloAssunto, modelosAssunto } = req.body || {};
   if (nomePortal !== undefined && !String(nomePortal).trim()) {
     return res.status(400).json({ erro: 'Nome não pode ser vazio' });
   }
   const patch = {};
-  if (nomePortal   !== undefined) patch.nomePortal   = String(nomePortal).trim();
+  if (nomePortal    !== undefined) patch.nomePortal    = String(nomePortal).trim();
   if (modeloAssunto !== undefined) patch.modeloAssunto = String(modeloAssunto).trim();
+  if (modelosAssunto !== undefined) {
+    if (!Array.isArray(modelosAssunto)) return res.status(400).json({ erro: 'modelosAssunto deve ser um array' });
+    patch.modelosAssunto = modelosAssunto
+      .map(m => String(m).trim())
+      .filter(m => m.length > 0)
+      .slice(0, 20); // máximo 20 modelos
+  }
   const updated = cfgDb.update(patch);
   log.ok('Config atualizada', { nomePortal: updated.nomePortal });
   res.json(updated);

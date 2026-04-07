@@ -1392,16 +1392,21 @@ async function pagePersonalizacao() {
           <input class="input" id="inp-nome-portal" value="${esc(cfg.nomePortal||'BoletoHub')}" maxlength="40" placeholder="BoletoHub">
         </div>
 
-        <div class="field" style="margin-top:16px">
-          <label>Modelo padrão do assunto do e-mail</label>
-          <input class="input" id="inp-modelo-assunto" value="${esc(cfg.modeloAssunto||'Honorário - {{mes}}/{{ano}} ({{nome}})')}" maxlength="120" placeholder="Honorário - {{mes}}/{{ano}} ({{nome}})">
-          <p class="text-muted" style="font-size:12px;margin-top:6px">
-            Variáveis disponíveis: <code>{{nome}}</code> — nome do cliente &nbsp;·&nbsp;
-            <code>{{mes}}</code> — mês atual &nbsp;·&nbsp; <code>{{ano}}</code> — ano atual &nbsp;·&nbsp;
-            <code>{{valor}}</code> — valor do boleto &nbsp;·&nbsp; <code>{{vencimento}}</code> — data de vencimento
-          </p>
+        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar nome</button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:4px">Modelos de assunto do e-mail</h3>
+        <p class="text-muted" style="font-size:12px;margin-bottom:14px">
+          Selecione o modelo ativo (marcado com ●). Variáveis disponíveis:
+          <code>{{nome}}</code> cliente · <code>{{mes}}</code> mês · <code>{{ano}}</code> ano ·
+          <code>{{valor}}</code> valor · <code>{{vencimento}}</code> vencimento
+        </p>
+        <div id="lista-modelos" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="input" id="inp-novo-modelo" placeholder="Novo modelo... ex: Honorário de TI - {{mes}}/{{ano}} ({{nome}})" maxlength="140" style="flex:1">
+          <button class="btn btn-secondary" id="btn-add-modelo" style="white-space:nowrap">+ Adicionar</button>
         </div>
-        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar</button>
       </div>
 
       <div class="card">
@@ -1420,14 +1425,76 @@ async function pagePersonalizacao() {
     </div>
   `);
 
+  // ── Modelos de assunto ──────────────────────────────────────────
+  let modelos = Array.isArray(cfg.modelosAssunto) && cfg.modelosAssunto.length
+    ? [...cfg.modelosAssunto]
+    : [cfg.modeloAssunto || 'Honorário - {{mes}}/{{ano}} ({{nome}})'];
+  let modeloAtivo = cfg.modeloAssunto || modelos[0];
+
+  function renderModelos() {
+    const el = document.getElementById('lista-modelos');
+    if (!el) return;
+    el.innerHTML = modelos.map((m, i) => {
+      const ativo = m === modeloAtivo;
+      return `<div style="display:flex;align-items:center;gap:8px;background:${ativo?'var(--bg-secondary)':'transparent'};border:1px solid ${ativo?'var(--primary)':'var(--border)'};border-radius:8px;padding:8px 12px">
+        <input type="radio" name="modelo-radio" value="${i}" ${ativo?'checked':''} id="mr-${i}" style="accent-color:var(--primary);cursor:pointer;flex-shrink:0">
+        <label for="mr-${i}" style="flex:1;cursor:pointer;font-size:13px;word-break:break-word">${esc(m)}</label>
+        ${modelos.length > 1 ? `<button class="btn btn-ghost btn-sm btn-del-modelo" data-idx="${i}" title="Remover" style="flex-shrink:0;color:var(--danger)">✕</button>` : ''}
+      </div>`;
+    }).join('');
+
+    el.querySelectorAll('input[name="modelo-radio"]').forEach(r => {
+      r.addEventListener('change', async () => {
+        modeloAtivo = modelos[Number(r.value)];
+        renderModelos();
+        try {
+          await api.salvarConfig({ modeloAssunto: modeloAtivo, modelosAssunto: modelos });
+          toast('Modelo ativo alterado!', 'success');
+        } catch(e) { toast(e.message, 'error'); }
+      });
+    });
+
+    el.querySelectorAll('.btn-del-modelo').forEach(b => {
+      b.addEventListener('click', async () => {
+        const idx = Number(b.dataset.idx);
+        if (modelos[idx] === modeloAtivo) modeloAtivo = modelos.find((_, i) => i !== idx) || '';
+        modelos.splice(idx, 1);
+        renderModelos();
+        try {
+          await api.salvarConfig({ modeloAssunto: modeloAtivo, modelosAssunto: modelos });
+          toast('Modelo removido', 'success');
+        } catch(e) { toast(e.message, 'error'); }
+      });
+    });
+  }
+  renderModelos();
+
+  document.getElementById('btn-add-modelo').addEventListener('click', async () => {
+    const inp = document.getElementById('inp-novo-modelo');
+    const novo = inp.value.trim();
+    if (!novo) return toast('Digite o modelo antes de adicionar', 'warning');
+    if (modelos.includes(novo)) return toast('Esse modelo já existe', 'warning');
+    modelos.push(novo);
+    inp.value = '';
+    renderModelos();
+    try {
+      await api.salvarConfig({ modelosAssunto: modelos });
+      toast('Modelo adicionado!', 'success');
+    } catch(e) { toast(e.message, 'error'); }
+  });
+
+  // Enter no input adiciona o modelo
+  document.getElementById('inp-novo-modelo').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-add-modelo').click();
+  });
+
   document.getElementById('btn-salvar-nome').addEventListener('click', async () => {
-    const nome   = document.getElementById('inp-nome-portal').value.trim();
-    const modelo = document.getElementById('inp-modelo-assunto').value.trim();
+    const nome = document.getElementById('inp-nome-portal').value.trim();
     if (!nome) return toast('Informe um nome', 'warning');
     try {
-      const updated = await api.salvarConfig({ nomePortal: nome, modeloAssunto: modelo });
+      const updated = await api.salvarConfig({ nomePortal: nome });
       await aplicarConfig(updated);
-      toast('Configurações salvas!', 'success');
+      toast('Nome do portal salvo!', 'success');
     } catch(e) { toast(e.message, 'error'); }
   });
 
