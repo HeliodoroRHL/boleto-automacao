@@ -35,6 +35,19 @@ function resolverFrom(emailFromOverride) {
   return process.env.EMAIL_FROM || user;
 }
 
+// Gera nome do arquivo PDF com nome do cliente (sem caracteres especiais)
+function nomePdf(clienteNome, boletoId) {
+  if (clienteNome) {
+    const seguro = clienteNome
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove acentos
+      .replace(/[^a-zA-Z0-9 ]/g, '')                   // só letras, números e espaço
+      .trim().replace(/\s+/g, '_')                      // espaços viram _
+      .substring(0, 40);                                // máx 40 chars
+    if (seguro) return `boleto_${seguro}.pdf`;
+  }
+  return `boleto-${boletoId || 'documento'}.pdf`;
+}
+
 function textoParaHtml(texto) {
   return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.7;max-width:600px;margin:0 auto;padding:24px">
 ${texto.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}
@@ -55,7 +68,7 @@ module.exports = {
       html:        textoParaHtml(body),
       textEncoding: 'base64',
       attachments: pdfBuffer ? [{
-        filename:    `boleto-${boletoId || 'documento'}.pdf`,
+        filename:    nomePdf(clienteNome, boletoId),
         content:     pdfBuffer,
         contentType: 'application/pdf',
         contentDisposition: 'attachment',
