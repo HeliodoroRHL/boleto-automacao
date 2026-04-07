@@ -207,6 +207,8 @@ tbody tr:hover td { background: #f8fafc; }
   border-radius: 3px;
 }
 .btn-privacy.ativo { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-wa { background: #25d366; color: #fff; border-color: #25d366; display:inline-flex; align-items:center; gap:4px; }
+.btn-wa:hover { background: #1da851; border-color: #1da851; color: #fff; }
 
 /* ── Tag mês atual nos boletos ───────────────────────────────────────────────── */
 .tag-mes-atual { display:inline-block; background:#eff6ff; color:#2563eb; font-size:10px; font-weight:600; padding:1px 6px; border-radius:10px; vertical-align:middle; margin-left:6px; }

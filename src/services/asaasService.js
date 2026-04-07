@@ -31,9 +31,9 @@ module.exports = {
     return { ok: true, totalCount: data.totalCount };
   },
 
-  // Lista boletos de uma conta
+  // Lista pagamentos de uma conta (boletos, PIX, cartão — todos os tipos)
   async listarBoletos({ status, offset = 0, limit = 50, apiKey } = {}) {
-    const params = { billingType: 'BOLETO', offset, limit };
+    const params = { offset, limit };
     if (status) params.status = status;
     const { data } = await client(apiKey).get('/payments', { params });
     return data;

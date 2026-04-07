@@ -1,6 +1,5 @@
 const asaas        = require('./asaasService');
 const emailSvc     = require('./emailService');
-const waSvc        = require('./whatsappService');
 const contasDb     = require('../db/contas');
 const autoDb       = require('../db/automacoes');
 const auditoriaDb  = require('../db/auditoria');
@@ -129,35 +128,16 @@ async function executarAutomacao(auto) {
       const vars    = { nome: nomeCliente, valor, vencimento, mes, ano, linkBoleto, tipoPagamento: tipoPag };
       const assunto = renderTemplate(auto.assunto || '', vars);
       const corpo   = renderTemplate(auto.corpo   || '', vars);
-      const msgWa   = auto.mensagemWhatsApp ? renderTemplate(auto.mensagemWhatsApp, vars) : null;
 
       let pdfBuffer = null;
       if (auto.anexarPdf && pag.billingType === 'BOLETO' && pag.bankSlipUrl) {
         pdfBuffer = await asaas.downloadPdf(pag.bankSlipUrl).catch(() => null);
       }
 
-      const canaisEnviados = [];
-
-      // Envio por e-mail
-      if (auto.enviarEmail !== false && emailDest) {
-        await emailSvc.enviar({ to: emailDest, subject: assunto, body: corpo, pdfBuffer, boletoId: pag.id, clienteNome: nomeCliente, emailFromOverride });
-        canaisEnviados.push('email');
-        log.ok('Email enviado (automação)', { email: emailDest, id: pag.id });
-      }
-
-      // Envio por WhatsApp
-      if (auto.enviarWhatsApp && msgWa) {
-        const telefone = cliente?.mobilePhone || cliente?.phone || '';
-        if (telefone) {
-          await waSvc.enviar(telefone, msgWa);
-          canaisEnviados.push('whatsapp');
-        } else {
-          log.warn('WhatsApp: sem telefone cadastrado', { cliente: nomeCliente, id: pag.id });
-        }
-      }
-
+      await emailSvc.enviar({ to: emailDest, subject: assunto, body: corpo, pdfBuffer, boletoId: pag.id, clienteNome: nomeCliente, emailFromOverride });
       enviados++;
-      detalhes.push({ id: pag.id, email: emailDest, cliente: nomeCliente, status: 'enviado', canais: canaisEnviados });
+      detalhes.push({ id: pag.id, email: emailDest, cliente: nomeCliente, status: 'enviado' });
+      log.ok('Email enviado (automação)', { email: emailDest, id: pag.id });
     } catch (err) {
       erros++;
       detalhes.push({ id: pag.id, status: 'erro', erro: err.message });
