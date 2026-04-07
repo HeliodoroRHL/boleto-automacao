@@ -12,6 +12,7 @@ const DEFAULTS = {
     'Honorário de Serviço de TI - {{mes}}/{{ano}} ({{nome}})',
     'Honorário de TI e Backup em Nuvem - {{mes}}/{{ano}} ({{nome}})',
   ],
+  rodapeEmail:     '',   // Ex: "RHL Soluções · (11) 99999-9999 · www.rhl.com.br"
 };
 
 function load() {

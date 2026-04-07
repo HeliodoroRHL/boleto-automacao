@@ -104,6 +104,30 @@ module.exports = {
     return data;
   },
 
+  // Cria uma assinatura (cobrança recorrente) no Asaas
+  async criarAssinatura({ customer, billingType, value, nextDueDate, cycle,
+                           description, endDate, maxPayments, apiKey }) {
+    const { data } = await client(apiKey).post('/subscriptions', {
+      customer,
+      billingType,
+      value,
+      nextDueDate,
+      cycle,
+      description:  description  || undefined,
+      endDate:      endDate      || undefined,
+      maxPayments:  maxPayments  || undefined,
+    });
+    return data;
+  },
+
+  // Lista assinaturas de uma conta
+  async listarAssinaturas({ status, offset = 0, limit = 50, apiKey } = {}) {
+    const params = { offset, limit };
+    if (status) params.status = status;
+    const { data } = await client(apiKey).get('/subscriptions', { params });
+    return data;
+  },
+
   // Stats de uma conta (4 queries paralelas)
   async getStats(apiKey) {
     const [pendentes, pagos, vencidos, cancelados] = await Promise.all([

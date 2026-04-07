@@ -52,7 +52,7 @@ function nomePdf(clienteNome, boletoId) {
 }
 
 // Monta HTML do email com layout e logo da empresa
-function montarHtmlEmail(body, nomePortal, temLogo) {
+function montarHtmlEmail(body, nomePortal, temLogo, rodapeEmail) {
   const corpoHtml = body
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -88,7 +88,9 @@ function montarHtmlEmail(body, nomePortal, temLogo) {
         <!-- Rodapé -->
         <tr>
           <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;text-align:center;color:#94a3b8;font-size:12px">
-            ${nomePortal} &nbsp;·&nbsp; Este é um e-mail automático, não responda a esta mensagem.
+            ${rodapeEmail
+              ? rodapeEmail.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,' &nbsp;·&nbsp; ')
+              : `${nomePortal} &nbsp;·&nbsp; Este é um e-mail automático, não responda a esta mensagem.`}
           </td>
         </tr>
 
@@ -106,7 +108,8 @@ module.exports = {
 
     // Carrega config do portal para o layout do email
     const cfg        = cfgDb.get();
-    const nomePortal = cfg.nomePortal || 'BoletoHub';
+    const nomePortal = cfg.nomePortal  || 'BoletoHub';
+    const rodapeEmail = cfg.rodapeEmail || '';
     const logoPath   = cfg.logoPath
       ? path.join(__dirname, '../../public', cfg.logoPath)
       : null;
@@ -139,7 +142,7 @@ module.exports = {
       cc:           cc || undefined,
       subject,
       text:         body,
-      html:         montarHtmlEmail(body, nomePortal, temLogo),
+      html:         montarHtmlEmail(body, nomePortal, temLogo, rodapeEmail),
       textEncoding: 'base64',
       attachments,
     });

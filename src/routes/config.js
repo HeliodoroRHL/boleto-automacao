@@ -34,7 +34,7 @@ router.get('/', (req, res) => {
 
 // PUT /api/config — atualiza configurações gerais
 router.put('/', (req, res) => {
-  const { nomePortal, modeloAssunto, modelosAssunto } = req.body || {};
+  const { nomePortal, modeloAssunto, modelosAssunto, rodapeEmail } = req.body || {};
   if (nomePortal !== undefined && !String(nomePortal).trim()) {
     return res.status(400).json({ erro: 'Nome não pode ser vazio' });
   }
@@ -48,6 +48,7 @@ router.put('/', (req, res) => {
       .filter(m => m.length > 0)
       .slice(0, 20); // máximo 20 modelos
   }
+  if (rodapeEmail !== undefined) patch.rodapeEmail = String(rodapeEmail).substring(0, 300);
   const updated = cfgDb.update(patch);
   log.ok('Config atualizada', { nomePortal: updated.nomePortal });
   res.json(updated);

@@ -147,6 +147,44 @@ router.post('/cobrancas', async (req, res) => {
   }
 });
 
+// POST /api/painel/assinaturas — cria cobrança recorrente no Asaas
+router.post('/assinaturas', async (req, res) => {
+  try {
+    const { contaId, customer, customerName, customerCpfCnpj, customerEmail,
+            billingType, value, nextDueDate, cycle, description, endDate, maxPayments } = req.body || {};
+
+    if (!billingType || !value || !nextDueDate || !cycle) {
+      return res.status(400).json({ erro: 'billingType, value, nextDueDate e cycle são obrigatórios' });
+    }
+
+    const { apiKey } = resolverConta(contaId);
+    let customerId = customer;
+
+    if (!customerId) {
+      if (!customerName) return res.status(400).json({ erro: 'Informe o cliente ou o nome para criar um novo' });
+      const novo = await asaas.criarCliente({
+        name: customerName, cpfCnpj: customerCpfCnpj || undefined,
+        email: customerEmail || undefined, apiKey,
+      });
+      customerId = novo.id;
+    }
+
+    const assinatura = await asaas.criarAssinatura({
+      customer: customerId, billingType, value: Number(value),
+      nextDueDate, cycle, description: description || undefined,
+      endDate: endDate || undefined,
+      maxPayments: maxPayments ? Number(maxPayments) : undefined,
+      apiKey,
+    });
+
+    log.ok('Assinatura criada', { id: assinatura.id, cycle, value, contaId });
+    res.json(assinatura);
+  } catch (e) {
+    log.error('Erro ao criar assinatura', { erro: e.message });
+    res.status(e.status || 502).json({ erro: e.response?.data?.errors?.[0]?.description || e.message });
+  }
+});
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 router.get('/stats', async (req, res) => {

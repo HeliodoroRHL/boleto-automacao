@@ -230,7 +230,8 @@ const api = {
   deletarLogo:  ()  => apiFetch('/api/config/logo', { method:'DELETE' }),
 
   // Cobranças
-  criarCobranca: (b) => apiFetch('/api/painel/cobrancas', { method:'POST', body: JSON.stringify(b) }),
+  criarCobranca:    (b) => apiFetch('/api/painel/cobrancas',    { method:'POST', body: JSON.stringify(b) }),
+  criarAssinatura:  (b) => apiFetch('/api/painel/assinaturas',  { method:'POST', body: JSON.stringify(b) }),
 
   // PIX copia e cola
   pixQrCode: (id, c) => apiFetch(`/api/painel/boletos/${id}/pix?${q({contaId:c})}`),
@@ -1212,11 +1213,14 @@ async function pageAutomacoes() {
             </div>
             <div class="field" style="grid-column:1/-1">
               <label>Assunto do e-mail</label>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input class="input" id="f-assunto-auto" value="${esc(a?.assunto||'Seu boleto de {{mes}}/{{ano}} está disponível')}" list="datalist-modelos-auto" style="flex:1">
-                <datalist id="datalist-modelos-auto"></datalist>
+              <input class="input" id="f-assunto-auto" value="${esc(a?.assunto||'Seu boleto de {{mes}}/{{ano}} está disponível')}">
+              <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+                <select class="input" id="sel-modelo-assunto-auto" style="flex:1;font-size:12px">
+                  <option value="">— Usar modelo salvo em Personalização —</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-aplicar-modelo-auto">Aplicar</button>
               </div>
-              <span class="text-muted" style="font-size:11px">Variáveis: {{nome}} {{valor}} {{vencimento}} {{mes}} {{ano}} {{tipoPagamento}} &nbsp;·&nbsp; <span style="color:var(--primary)">Ou selecione um modelo salvo ↑</span></span>
+              <span class="text-muted" style="font-size:11px;margin-top:4px;display:block">Variáveis: {{nome}} {{valor}} {{vencimento}} {{mes}} {{ano}} {{tipoPagamento}}</span>
             </div>
             <div class="field" style="grid-column:1/-1">
               <label>Corpo do e-mail</label>
@@ -1264,13 +1268,22 @@ async function pageAutomacoes() {
 
     document.getElementById('btn-cancelar-auto').addEventListener('click', () => renderLista());
 
-    // Popula datalist com modelos de assunto salvos em Personalização
+    // Popula select de modelos de assunto salvos em Personalização
     api.getConfig().then(cfg => {
-      const dl = document.getElementById('datalist-modelos-auto');
-      if (!dl) return;
+      const sel = document.getElementById('sel-modelo-assunto-auto');
+      if (!sel) return;
       const lista = Array.isArray(cfg.modelosAssunto) ? cfg.modelosAssunto : (cfg.modeloAssunto ? [cfg.modeloAssunto] : []);
-      dl.innerHTML = lista.map(m => `<option value="${esc(m)}">`).join('');
+      lista.forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        sel.appendChild(opt);
+      });
     }).catch(() => {});
+    document.getElementById('btn-aplicar-modelo-auto').addEventListener('click', () => {
+      const sel = document.getElementById('sel-modelo-assunto-auto');
+      if (sel.value) document.getElementById('f-assunto-auto').value = sel.value;
+    });
 
     // Mostra/oculta campos conforme gatilho selecionado
     document.getElementById('f-gatilho-auto').addEventListener('change', e => {
@@ -1406,7 +1419,17 @@ async function pagePersonalizacao() {
           <input class="input" id="inp-nome-portal" value="${esc(cfg.nomePortal||'BoletoHub')}" maxlength="40" placeholder="BoletoHub">
         </div>
 
-        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar nome</button>
+        <div class="field" style="margin-top:16px">
+          <label>Rodapé dos e-mails enviados</label>
+          <input class="input" id="inp-rodape-email" value="${esc(cfg.rodapeEmail||'')}" maxlength="300"
+            placeholder="Ex: RHL Soluções Tecnológicas · (11) 99999-9999 · www.rhlsolucoes.com.br">
+          <p class="text-muted" style="font-size:12px;margin-top:5px">
+            Aparece no rodapé de todos os e-mails enviados pelo sistema. Use · para separar informações.<br>
+            Se deixar em branco, exibe: <em>${esc(cfg.nomePortal||'BoletoHub')} · Este é um e-mail automático...</em>
+          </p>
+        </div>
+
+        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar</button>
       </div>
 
       <div class="card">
@@ -1503,12 +1526,13 @@ async function pagePersonalizacao() {
   });
 
   document.getElementById('btn-salvar-nome').addEventListener('click', async () => {
-    const nome = document.getElementById('inp-nome-portal').value.trim();
+    const nome   = document.getElementById('inp-nome-portal').value.trim();
+    const rodape = document.getElementById('inp-rodape-email').value;
     if (!nome) return toast('Informe um nome', 'warning');
     try {
-      const updated = await api.salvarConfig({ nomePortal: nome });
+      const updated = await api.salvarConfig({ nomePortal: nome, rodapeEmail: rodape });
       await aplicarConfig(updated);
-      toast('Nome do portal salvo!', 'success');
+      toast('Configurações salvas!', 'success');
     } catch(e) { toast(e.message, 'error'); }
   });
 
@@ -1544,7 +1568,6 @@ async function pagePersonalizacao() {
   }
 }
 
-// ── Página: Auditoria ─────────────────────────────────────────────────────────
 // ── Página: Nova Cobrança ─────────────────────────────────────────────────────
 async function pageNovaCobranca() {
   setTitle('Nova Cobrança'); setActive('nova-cobranca');
@@ -1552,15 +1575,51 @@ async function pageNovaCobranca() {
 
   let clientes = [];
   let contaIdAtual = getContaId();
+  let abaAtiva = 'avulsa'; // 'avulsa' | 'recorrente'
 
   async function carregarClientes(cid) {
-    try {
-      const r = await api.listarClientes(cid);
-      clientes = r.data || [];
-    } catch { clientes = []; }
+    try { const r = await api.listarClientes(cid); clientes = r.data || []; }
+    catch { clientes = []; }
   }
 
   await carregarClientes(contaIdAtual);
+
+  function clienteFields(optClientes) {
+    return `
+      <div class="field" style="grid-column:1/-1">
+        <label>Cliente cadastrado</label>
+        <select class="input" id="cobr-cliente-sel">
+          <option value="">— Selecionar da lista —</option>
+          ${optClientes}
+        </select>
+        <span class="text-muted" style="font-size:12px;margin-top:4px;display:block">Ou preencha abaixo para criar novo cliente automaticamente</span>
+      </div>
+      <div class="field" style="grid-column:1/-1">
+        <label>Nome do novo cliente <span class="text-muted">(se não selecionado acima)</span></label>
+        <input class="input" id="cobr-nome" placeholder="Nome completo ou razão social">
+      </div>
+      <div class="field">
+        <label>CPF / CNPJ</label>
+        <input class="input" id="cobr-cpfcnpj" placeholder="000.000.000-00" maxlength="18">
+      </div>
+      <div class="field">
+        <label>E-mail do cliente</label>
+        <input class="input" id="cobr-email" type="email" placeholder="cliente@email.com">
+      </div>`;
+  }
+
+  function resultHtml(resultado) {
+    if (!resultado) return '';
+    if (resultado.erro) return `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:14px;margin-bottom:16px;color:#991b1b">${esc(resultado.erro)}</div>`;
+    const isAssinatura = !!resultado.cycle;
+    return `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;margin-bottom:16px">
+      <strong style="color:#166534">${isAssinatura ? 'Assinatura criada!' : 'Cobrança criada!'}</strong><br>
+      <span class="text-muted" style="font-size:13px">ID: ${esc(resultado.id)} &nbsp;·&nbsp; Status: ${esc(resultado.status)}${isAssinatura ? ` &nbsp;·&nbsp; Ciclo: ${esc(resultado.cycle)}` : ''}</span>
+      ${resultado.bankSlipUrl ? `<br><a href="${esc(resultado.bankSlipUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="margin-top:10px">Ver boleto</a>` : ''}
+      ${resultado.invoiceUrl  ? `<a href="${esc(resultado.invoiceUrl)}"  target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="margin-top:10px;margin-left:6px">Ver fatura</a>` : ''}
+      ${!isAssinatura ? `<button class="btn btn-primary btn-sm" id="btn-enviar-email-cobr" data-boleto="${esc(resultado.id)}" style="margin-top:10px;margin-left:6px">Enviar e-mail</button>` : ''}
+    </div>`;
+  }
 
   function renderPagina(resultado = null) {
     const hoje = new Date().toISOString().split('T')[0];
@@ -1568,84 +1627,107 @@ async function pageNovaCobranca() {
       `<option value="${esc(c.id)}">${esc(c.name)}${c.cpfCnpj ? ' — ' + esc(c.cpfCnpj) : ''}</option>`
     ).join('');
 
-    const resultHtml = resultado
-      ? resultado.erro
-        ? `<div class="alert alert-error" style="margin-bottom:16px">${esc(resultado.erro)}</div>`
-        : `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;margin-bottom:16px">
-             <strong style="color:#166534">Cobrança criada com sucesso!</strong><br>
-             <span class="text-muted" style="font-size:13px">ID: ${esc(resultado.id)} &nbsp;·&nbsp; Status: ${esc(resultado.status)}</span>
-             ${resultado.bankSlipUrl ? `<br><a href="${esc(resultado.bankSlipUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="margin-top:10px">Ver boleto</a>` : ''}
-             ${resultado.invoiceUrl  ? `<br><a href="${esc(resultado.invoiceUrl)}"  target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="margin-top:10px">Ver fatura</a>` : ''}
-             <button class="btn btn-primary btn-sm" id="btn-enviar-email-cobr" data-boleto="${esc(resultado.id)}" style="margin-top:10px">Enviar e-mail</button>
-           </div>`
-      : '';
+    const formAvulsa = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        ${clienteFields(optClientes)}
+        <div class="field">
+          <label>Tipo de cobrança</label>
+          <select class="input" id="cobr-tipo">
+            <option value="BOLETO">Boleto bancário</option>
+            <option value="PIX">PIX</option>
+            <option value="UNDEFINED">Boleto + PIX (cliente escolhe)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input class="input" id="cobr-valor" type="number" step="0.01" min="0.01" placeholder="0,00">
+        </div>
+        <div class="field">
+          <label>Vencimento</label>
+          <input class="input" id="cobr-vencimento" type="date" value="${hoje}">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Descrição <span class="text-muted">(opcional)</span></label>
+          <input class="input" id="cobr-descricao" placeholder="Ex: Honorário de TI - Abril/2026">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px;align-items:center">
+        <button class="btn btn-primary" id="btn-criar-cobr">Criar cobrança</button>
+        <span id="cobr-status" class="text-muted" style="font-size:13px"></span>
+      </div>`;
+
+    const formRecorrente = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        ${clienteFields(optClientes)}
+        <div class="field">
+          <label>Tipo de cobrança</label>
+          <select class="input" id="rec-tipo">
+            <option value="BOLETO">Boleto bancário</option>
+            <option value="PIX">PIX</option>
+            <option value="UNDEFINED">Boleto + PIX (cliente escolhe)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input class="input" id="rec-valor" type="number" step="0.01" min="0.01" placeholder="0,00">
+        </div>
+        <div class="field">
+          <label>Ciclo de cobrança</label>
+          <select class="input" id="rec-ciclo">
+            <option value="WEEKLY">Semanal</option>
+            <option value="BIWEEKLY">Quinzenal</option>
+            <option value="MONTHLY" selected>Mensal</option>
+            <option value="QUARTERLY">Trimestral</option>
+            <option value="SEMIANNUALLY">Semestral</option>
+            <option value="YEARLY">Anual</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Primeiro vencimento</label>
+          <input class="input" id="rec-inicio" type="date" value="${hoje}">
+        </div>
+        <div class="field">
+          <label>Máx. parcelas <span class="text-muted">(0 = sem limite)</span></label>
+          <input class="input" id="rec-maxparcelas" type="number" min="0" value="0" style="width:120px">
+        </div>
+        <div class="field">
+          <label>Data de encerramento <span class="text-muted">(opcional)</span></label>
+          <input class="input" id="rec-fim" type="date">
+        </div>
+        <div class="field" style="grid-column:1/-1">
+          <label>Descrição <span class="text-muted">(opcional)</span></label>
+          <input class="input" id="rec-descricao" placeholder="Ex: Plano Mensal de TI - RHL">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:20px;align-items:center">
+        <button class="btn btn-primary" id="btn-criar-rec">Criar assinatura</button>
+        <span id="rec-status" class="text-muted" style="font-size:13px"></span>
+      </div>`;
 
     render(contaBar() + `
-      <div style="max-width:600px">
-        ${resultHtml}
+      <div style="max-width:620px">
+        ${resultHtml(resultado)}
         <div class="card">
-          <h3 style="margin-bottom:20px">Nova Cobrança</h3>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-
-            <div class="field" style="grid-column:1/-1">
-              <label>Cliente existente</label>
-              <select class="input" id="cobr-cliente-sel">
-                <option value="">— Selecionar da lista —</option>
-                ${optClientes}
-              </select>
-              <span class="text-muted" style="font-size:12px;margin-top:4px;display:block">Ou preencha abaixo para criar novo cliente</span>
-            </div>
-
-            <div class="field" style="grid-column:1/-1">
-              <label>Nome do novo cliente <span class="text-muted">(se não selecionado acima)</span></label>
-              <input class="input" id="cobr-nome" placeholder="Nome completo ou razão social">
-            </div>
-
-            <div class="field">
-              <label>CPF / CNPJ</label>
-              <input class="input" id="cobr-cpfcnpj" placeholder="000.000.000-00" maxlength="18">
-            </div>
-
-            <div class="field">
-              <label>E-mail do cliente</label>
-              <input class="input" id="cobr-email" type="email" placeholder="cliente@email.com">
-            </div>
-
-            <div class="field">
-              <label>Tipo de cobrança</label>
-              <select class="input" id="cobr-tipo">
-                <option value="BOLETO">Boleto bancário</option>
-                <option value="PIX">PIX</option>
-                <option value="UNDEFINED">Boleto + PIX (cliente escolhe)</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label>Valor (R$)</label>
-              <input class="input" id="cobr-valor" type="number" step="0.01" min="0.01" placeholder="0,00">
-            </div>
-
-            <div class="field">
-              <label>Vencimento</label>
-              <input class="input" id="cobr-vencimento" type="date" value="${hoje}">
-            </div>
-
-            <div class="field" style="grid-column:1/-1">
-              <label>Descrição <span class="text-muted">(opcional)</span></label>
-              <input class="input" id="cobr-descricao" placeholder="Ex: Honorário de TI - Abril/2026">
-            </div>
-
+          <div style="display:flex;gap:8px;margin-bottom:20px">
+            <button class="tab-btn ${abaAtiva==='avulsa'?'active':''}" id="tab-avulsa">Cobrança avulsa</button>
+            <button class="tab-btn ${abaAtiva==='recorrente'?'active':''}" id="tab-recorrente">Cobrança recorrente</button>
           </div>
-          <div style="display:flex;gap:8px;margin-top:20px;align-items:center;flex-wrap:wrap">
-            <button class="btn btn-primary" id="btn-criar-cobr">Criar cobrança</button>
-            <span id="cobr-status" class="text-muted" style="font-size:13px"></span>
-          </div>
+          <div id="form-avulsa"     style="${abaAtiva==='avulsa'?'':'display:none'}">${formAvulsa}</div>
+          <div id="form-recorrente" style="${abaAtiva==='recorrente'?'':'display:none'}">${formRecorrente}</div>
         </div>
       </div>
     `);
     bindContaBar();
 
-    // Trocar conta recarrega lista de clientes
+    // Troca de aba
+    document.getElementById('tab-avulsa').addEventListener('click', () => {
+      abaAtiva = 'avulsa'; renderPagina();
+    });
+    document.getElementById('tab-recorrente').addEventListener('click', () => {
+      abaAtiva = 'recorrente'; renderPagina();
+    });
+
+    // Trocar conta Asaas recarrega clientes
     document.getElementById('conta-sel')?.addEventListener('change', async e => {
       contaIdAtual = e.target.value;
       state.contaId = contaIdAtual;
@@ -1654,50 +1736,85 @@ async function pageNovaCobranca() {
       renderPagina();
     });
 
-    document.getElementById('btn-criar-cobr').addEventListener('click', async () => {
-      const sel        = document.getElementById('cobr-cliente-sel').value;
-      const nome       = document.getElementById('cobr-nome').value.trim();
-      const cpfcnpj    = document.getElementById('cobr-cpfcnpj').value.trim();
-      const emailCobr  = document.getElementById('cobr-email').value.trim();
-      const tipo       = document.getElementById('cobr-tipo').value;
-      const valor      = parseFloat(document.getElementById('cobr-valor').value);
-      const venc       = document.getElementById('cobr-vencimento').value;
-      const descricao  = document.getElementById('cobr-descricao').value.trim();
-      const statusEl   = document.getElementById('cobr-status');
+    function lerClienteFields() {
+      return {
+        sel:      document.getElementById('cobr-cliente-sel')?.value || document.getElementById('cobr-cliente-sel')?.value,
+        nome:     document.getElementById('cobr-nome')?.value.trim()    || '',
+        cpfcnpj:  document.getElementById('cobr-cpfcnpj')?.value.trim() || '',
+        emailCobr:document.getElementById('cobr-email')?.value.trim()   || '',
+      };
+    }
 
-      if (!tipo || !valor || !venc) return toast('Preencha tipo, valor e vencimento', 'warning');
-      if (!sel && !nome) return toast('Selecione um cliente ou informe o nome para criar novo', 'warning');
+    // ── Avulsa ──
+    document.getElementById('btn-criar-cobr')?.addEventListener('click', async () => {
+      const { sel, nome, cpfcnpj, emailCobr } = lerClienteFields();
+      const tipo     = document.getElementById('cobr-tipo').value;
+      const valor    = parseFloat(document.getElementById('cobr-valor').value);
+      const venc     = document.getElementById('cobr-vencimento').value;
+      const descricao= document.getElementById('cobr-descricao').value.trim();
+      const statusEl = document.getElementById('cobr-status');
 
+      if (!valor || !venc) return toast('Preencha valor e vencimento', 'warning');
+      if (!sel && !nome) return toast('Selecione um cliente ou informe o nome', 'warning');
       statusEl.textContent = 'Criando...';
       document.getElementById('btn-criar-cobr').disabled = true;
-
       try {
-        const payload = {
-          contaId:         contaIdAtual || undefined,
-          billingType:     tipo,
-          value:           valor,
-          dueDate:         venc,
-          description:     descricao || undefined,
-          customer:        sel || undefined,
+        const res = await api.criarCobranca({
+          contaId: contaIdAtual || undefined, billingType: tipo, value: valor,
+          dueDate: venc, description: descricao || undefined,
+          customer: sel || undefined,
           customerName:    sel ? undefined : nome,
           customerCpfCnpj: sel ? undefined : (cpfcnpj || undefined),
           customerEmail:   sel ? undefined : (emailCobr || undefined),
-        };
-        const res = await api.criarCobranca(payload);
-        statusEl.textContent = '';
-        document.getElementById('btn-criar-cobr').disabled = false;
-        renderPagina(res);
-        // Recarrega lista de clientes (pode ter sido criado um novo)
+        });
         await carregarClientes(contaIdAtual);
+        renderPagina(res);
         toast('Cobrança criada!', 'success');
       } catch(e) {
-        statusEl.textContent = '';
         document.getElementById('btn-criar-cobr').disabled = false;
+        statusEl.textContent = '';
         renderPagina({ erro: e.message });
       }
     });
 
-    // Botão enviar email após criar
+    // ── Recorrente ──
+    document.getElementById('btn-criar-rec')?.addEventListener('click', async () => {
+      const { sel, nome, cpfcnpj, emailCobr } = lerClienteFields();
+      const tipo      = document.getElementById('rec-tipo').value;
+      const valor     = parseFloat(document.getElementById('rec-valor').value);
+      const ciclo     = document.getElementById('rec-ciclo').value;
+      const inicio    = document.getElementById('rec-inicio').value;
+      const maxParc   = parseInt(document.getElementById('rec-maxparcelas').value) || 0;
+      const fim       = document.getElementById('rec-fim').value;
+      const descricao = document.getElementById('rec-descricao').value.trim();
+      const statusEl  = document.getElementById('rec-status');
+
+      if (!valor || !inicio) return toast('Preencha valor e primeiro vencimento', 'warning');
+      if (!sel && !nome) return toast('Selecione um cliente ou informe o nome', 'warning');
+      statusEl.textContent = 'Criando...';
+      document.getElementById('btn-criar-rec').disabled = true;
+      try {
+        const res = await api.criarAssinatura({
+          contaId: contaIdAtual || undefined, billingType: tipo, value: valor,
+          nextDueDate: inicio, cycle: ciclo,
+          description: descricao || undefined,
+          endDate:     fim || undefined,
+          maxPayments: maxParc > 0 ? maxParc : undefined,
+          customer: sel || undefined,
+          customerName:    sel ? undefined : nome,
+          customerCpfCnpj: sel ? undefined : (cpfcnpj || undefined),
+          customerEmail:   sel ? undefined : (emailCobr || undefined),
+        });
+        await carregarClientes(contaIdAtual);
+        renderPagina(res);
+        toast('Assinatura criada!', 'success');
+      } catch(e) {
+        document.getElementById('btn-criar-rec').disabled = false;
+        statusEl.textContent = '';
+        renderPagina({ erro: e.message });
+      }
+    });
+
     document.getElementById('btn-enviar-email-cobr')?.addEventListener('click', e => {
       navigate('email', e.target.dataset.boleto);
     });
