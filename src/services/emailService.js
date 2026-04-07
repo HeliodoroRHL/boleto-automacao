@@ -27,8 +27,12 @@ function criarTransporte() {
 function resolverFrom(emailFromOverride) {
   if (emailFromOverride) return emailFromOverride;
   const cfg = smtpDb.get();
-  if (cfg?.from) return cfg.from;
-  return process.env.EMAIL_FROM || process.env.EMAIL_USER;
+  const user = cfg?.user || process.env.EMAIL_USER || '';
+  // Se o campo "from" não contiver um endereço de email, monta "Nome <user>"
+  if (cfg?.from) {
+    return cfg.from.includes('@') ? cfg.from : `${cfg.from} <${user}>`;
+  }
+  return process.env.EMAIL_FROM || user;
 }
 
 function textoParaHtml(texto) {
@@ -49,10 +53,12 @@ module.exports = {
       subject,
       text:        body,
       html:        textoParaHtml(body),
+      textEncoding: 'base64',
       attachments: pdfBuffer ? [{
         filename:    `boleto-${boletoId || 'documento'}.pdf`,
         content:     pdfBuffer,
         contentType: 'application/pdf',
+        contentDisposition: 'attachment',
       }] : [],
     });
 
