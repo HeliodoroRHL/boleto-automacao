@@ -53,7 +53,7 @@ function waShareLink(nomeCliente, valor, dueDate, linkBoleto) {
   const [y, m, d] = (dueDate || '').split('-');
   const venc = dueDate ? `${d}/${m}/${y}` : '';
   const msg  = `Olá, ${nome}! 😊\n\nSegue seu boleto referente ao valor de *${val}*${venc ? `, com vencimento em *${venc}*` : ''}.\n\nAcesse pelo link abaixo:\n${linkBoleto}\n\nQualquer dúvida, estamos à disposição!`;
-  return `https://web.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+  return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }
 
 // ── API ───────────────────────────────────────────────────────────────────────
