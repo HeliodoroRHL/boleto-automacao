@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BoletoHub</title>
+  <link rel="stylesheet" href="css/style.css?v=8">
+</head>
+<body>
+
+<!-- ── Tela de Login ─────────────────────────────────────────────────────────── -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon" style="margin:0 auto 14px">B</div>
+      <h1>BoletoHub</h1>
+      <p>Faça login para continuar</p>
+    </div>
+    <form id="login-form" novalidate>
+      <div class="field">
+        <label for="l-email">E-mail</label>
+        <input class="input" id="l-email" type="email" autocomplete="email" placeholder="seu@email.com" required>
+      </div>
+      <div class="field" style="margin-top:14px">
+        <label for="l-password">Senha</label>
+        <input class="input" id="l-password" type="password" autocomplete="current-password" placeholder="Sua senha" required>
+      </div>
+      <p class="login-error" id="login-error" role="alert"></p>
+      <button type="submit" class="btn btn-primary" id="login-btn" style="width:100%;margin-top:20px;justify-content:center;padding:10px">
+        Entrar
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── App Principal (oculto até autenticado) ─────────────────────────────── -->
+<div class="app" id="app" hidden>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">B</div>
+      <div>
+        <div class="logo-text">BoletoHub</div>
+        <div class="logo-sub">Asaas &amp; Email</div>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Principal</div>
+      <button class="nav-item active" data-page="dashboard">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="nav-item" data-page="boletos">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Boletos Asaas
+      </button>
+      <button class="nav-item" data-page="contas">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+        Contas Asaas
+      </button>
+      <div class="nav-section">E-mail</div>
+      <button class="nav-item" data-page="email">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Enviar Email
+      </button>
+      <button class="nav-item" data-page="historico">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Histórico
+      </button>
+      <button class="nav-item" data-page="automacoes">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Automações
+      </button>
+      <div class="nav-section">Configurações</div>
+      <button class="nav-item" data-page="smtp">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Config. SMTP
+      </button>
+      <button class="nav-item" data-page="auditoria">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Auditoria
+      </button>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <h1 id="page-title">Dashboard</h1>
+      <div class="topbar-actions" id="topbar-actions">
+        <span class="text-muted" id="user-label" style="font-size:13px"></span>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('perfil')">Minha Conta</button>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Sair</button>
+      </div>
+    </div>
+    <div class="content" id="content">
+      <div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div>
+    </div>
+  </main>
+
+</div>
+
+<div id="toasts"></div>
+<script src="js/app.js?v=8"></script>
+</body>
+</html>
