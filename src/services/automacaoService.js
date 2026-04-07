@@ -1,5 +1,6 @@
 const asaas        = require('./asaasService');
 const emailSvc     = require('./emailService');
+const waSvc        = require('./whatsappService');
 const contasDb     = require('../db/contas');
 const autoDb       = require('../db/automacoes');
 const auditoriaDb  = require('../db/auditoria');
@@ -10,7 +11,9 @@ function renderTemplate(tpl, vars) {
   let out = tpl;
   out = out.replace(/\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, (_, key, inner) => vars[key] ? inner : '');
   Object.entries(vars).forEach(([k, v]) => {
-    out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v ?? '');
+    // Converte para string e escapa {{ }} para evitar injeção de template
+    const safe = String(v ?? '').replace(/\{\{/g, '{ {').replace(/\}\}/g, '} }');
+    out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), safe);
   });
   return out;
 }
@@ -126,16 +129,35 @@ async function executarAutomacao(auto) {
       const vars    = { nome: nomeCliente, valor, vencimento, mes, ano, linkBoleto, tipoPagamento: tipoPag };
       const assunto = renderTemplate(auto.assunto || '', vars);
       const corpo   = renderTemplate(auto.corpo   || '', vars);
+      const msgWa   = auto.mensagemWhatsApp ? renderTemplate(auto.mensagemWhatsApp, vars) : null;
 
       let pdfBuffer = null;
       if (auto.anexarPdf && pag.billingType === 'BOLETO' && pag.bankSlipUrl) {
         pdfBuffer = await asaas.downloadPdf(pag.bankSlipUrl).catch(() => null);
       }
 
-      await emailSvc.enviar({ to: emailDest, subject: assunto, body: corpo, pdfBuffer, boletoId: pag.id, clienteNome: nomeCliente, emailFromOverride });
+      const canaisEnviados = [];
+
+      // Envio por e-mail
+      if (auto.enviarEmail !== false && emailDest) {
+        await emailSvc.enviar({ to: emailDest, subject: assunto, body: corpo, pdfBuffer, boletoId: pag.id, clienteNome: nomeCliente, emailFromOverride });
+        canaisEnviados.push('email');
+        log.ok('Email enviado (automação)', { email: emailDest, id: pag.id });
+      }
+
+      // Envio por WhatsApp
+      if (auto.enviarWhatsApp && msgWa) {
+        const telefone = cliente?.mobilePhone || cliente?.phone || '';
+        if (telefone) {
+          await waSvc.enviar(telefone, msgWa);
+          canaisEnviados.push('whatsapp');
+        } else {
+          log.warn('WhatsApp: sem telefone cadastrado', { cliente: nomeCliente, id: pag.id });
+        }
+      }
+
       enviados++;
-      detalhes.push({ id: pag.id, email: emailDest, cliente: nomeCliente, status: 'enviado' });
-      log.ok('Email enviado (automação)', { email: emailDest, id: pag.id });
+      detalhes.push({ id: pag.id, email: emailDest, cliente: nomeCliente, status: 'enviado', canais: canaisEnviados });
     } catch (err) {
       erros++;
       detalhes.push({ id: pag.id, status: 'erro', erro: err.message });

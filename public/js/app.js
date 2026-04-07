@@ -97,6 +97,12 @@ const api = {
 
   // Auditoria
   auditoria: (limit=100) => apiFetch(`/api/auditoria?limit=${limit}`),
+
+  // WhatsApp
+  waStatus:       ()  => apiFetch('/api/whatsapp/status'),
+  waConectar:     ()  => apiFetch('/api/whatsapp/conectar',    { method:'POST' }),
+  waDesconectar:  ()  => apiFetch('/api/whatsapp/desconectar', { method:'POST' }),
+  waTestar:       (n) => apiFetch('/api/whatsapp/testar',      { method:'POST', body: JSON.stringify({ numero: n }) }),
 };
 
 function q(obj) { return new URLSearchParams(Object.fromEntries(Object.entries(obj).filter(([,v])=>v))); }
@@ -1186,6 +1192,119 @@ async function pageAuditoria() {
   } catch(e) { if(e.message==='session')return; document.querySelector('.card').innerHTML=`<div class="card-body">${erroCard(e.message)}</div>`; }
 }
 
+// ── WhatsApp ──────────────────────────────────────────────────────────────────
+async function pageWhatsApp() {
+  render('<div class="loading-overlay"><div class="spinner"></div></div>');
+  document.getElementById('page-title').textContent = 'WhatsApp';
+
+  let waData = { status: 'desconectado', qrCode: null };
+  try { waData = await api.waStatus(); } catch {}
+
+  function statusHtml(d) {
+    if (d.status === 'conectado')    return `<span class="badge badge-received">Conectado</span>`;
+    if (d.status === 'qr')           return `<span class="badge badge-pending">Aguardando QR</span>`;
+    return `<span class="badge badge-cancelled">Desconectado</span>`;
+  }
+
+  function qrHtml(qr) {
+    if (!qr) return '';
+    return `
+      <div style="margin:16px 0;text-align:center">
+        <p class="text-muted" style="margin-bottom:8px">Escaneie o QR Code com o WhatsApp do seu celular</p>
+        <div id="qr-container" style="display:inline-block;padding:12px;background:#fff;border-radius:8px;border:1px solid var(--border)">
+          <img id="qr-img" src="/api/whatsapp/qr.png?t=${Date.now()}" width="240" height="240" alt="QR Code WhatsApp">
+        </div>
+        <p class="text-muted" style="margin-top:8px;font-size:12px">WhatsApp → Dispositivos conectados → Conectar dispositivo</p>
+      </div>`;
+  }
+
+  render(`
+    <div class="card" style="max-width:520px">
+      <h3 style="margin-bottom:16px">WhatsApp Business (gratuito)</h3>
+      <p class="text-muted" style="margin-bottom:16px">Conecte um número de WhatsApp para enviar notificações de boletos sem custo. Utilize um número dedicado — não o pessoal.</p>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <span>Status:</span> <span id="wa-status-badge">${statusHtml(waData)}</span>
+      </div>
+
+      ${qrHtml(waData.qrCode)}
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px">
+        <button class="btn btn-primary" id="btn-wa-conectar" ${waData.status==='conectado'?'disabled':''}>
+          ${waData.status==='conectado'?'Já conectado':'Conectar / Gerar QR'}
+        </button>
+        <button class="btn btn-ghost" id="btn-wa-desconectar" ${waData.status!=='conectado'?'disabled':''}>
+          Desconectar
+        </button>
+      </div>
+
+      <div id="wa-teste-bloco" style="${waData.status!=='conectado'?'display:none':''}">
+        <hr style="margin-bottom:16px">
+        <h4 style="margin-bottom:10px">Enviar mensagem de teste</h4>
+        <div style="display:flex;gap:8px;align-items:flex-end">
+          <div class="field" style="flex:1;margin:0">
+            <label>Número (somente dígitos, com DDD e código do país)</label>
+            <input class="input" id="wa-numero-teste" placeholder="5511999990000" maxlength="20">
+          </div>
+          <button class="btn btn-primary" id="btn-wa-testar">Enviar teste</button>
+        </div>
+      </div>
+
+      <div id="wa-info-bloco" style="margin-top:20px">
+        <hr style="margin-bottom:14px">
+        <h4 style="margin-bottom:8px">Como usar nas automações</h4>
+        <ul style="margin:0;padding-left:20px;color:var(--text-muted);font-size:13px;line-height:1.8">
+          <li>Ative a opção <strong>"Enviar por WhatsApp"</strong> na configuração da automação</li>
+          <li>Defina o modelo de mensagem com as mesmas variáveis do e-mail: <code>{{nome}}</code>, <code>{{valor}}</code>, <code>{{vencimento}}</code>, <code>{{linkBoleto}}</code></li>
+          <li>O sistema buscará automaticamente o número cadastrado no cliente dentro do Asaas</li>
+        </ul>
+      </div>
+    </div>
+  `);
+
+  // (QR renderizado como imagem pelo servidor)
+
+  document.getElementById('btn-wa-conectar').addEventListener('click', async () => {
+    try {
+      const r = await api.waConectar();
+      toast('Aguarde o QR code aparecer...', 'info');
+      // Polling de status para atualizar QR
+      let tentativas = 0;
+      const poll = setInterval(async () => {
+        tentativas++;
+        const d = await api.waStatus().catch(() => null);
+        if (!d) return;
+        document.getElementById('wa-status-badge').innerHTML = statusHtml(d);
+        if (d.qrCode) {
+          const qrImg = document.getElementById('qr-img');
+          if (qrImg) { qrImg.src = `/api/whatsapp/qr.png?t=${Date.now()}`; }
+          else { pageWhatsApp(); return; }
+        }
+        if (d.status === 'conectado' || tentativas > 30) { clearInterval(poll); pageWhatsApp(); }
+      }, 3000);
+    } catch(e) { toast(e.message || 'Erro ao conectar', 'error'); }
+  });
+
+  document.getElementById('btn-wa-desconectar').addEventListener('click', async () => {
+    if (!confirm('Desconectar o WhatsApp?')) return;
+    await api.waDesconectar();
+    toast('WhatsApp desconectado', 'success');
+    pageWhatsApp();
+  });
+
+  const btnTestar = document.getElementById('btn-wa-testar');
+  if (btnTestar) {
+    btnTestar.addEventListener('click', async () => {
+      const num = document.getElementById('wa-numero-teste').value.trim();
+      if (!num) return toast('Informe o número', 'warning');
+      try {
+        await api.waTestar(num);
+        toast('Mensagem enviada!', 'success');
+      } catch(e) { toast(e.message || 'Erro ao enviar', 'error'); }
+    });
+  }
+}
+
 // ── Navegação ─────────────────────────────────────────────────────────────────
 function navigate(page,extra){ state.page=page; window.location.hash=extra?`${page}/${extra}`:page; }
 
@@ -1202,6 +1321,7 @@ function route(){
     case'automacoes':  return pageAutomacoes();
     case'smtp':        return pageSmtp();
     case'auditoria':   return pageAuditoria();
+    case'whatsapp':    return pageWhatsApp();
     default:         return pageDashboard();
   }
 }

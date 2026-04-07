@@ -32,8 +32,11 @@ module.exports = {
       assunto:          data.assunto          || 'Seu boleto de {{mes}}/{{ano}} está disponível',
       corpo:            data.corpo            || 'Olá, {{nome}}!\n\nSegue o boleto referente ao mês de {{mes}}/{{ano}}.\n\nValor: {{valor}}\nVencimento: {{vencimento}}\n\n{{#linkBoleto}}Acesse seu boleto: {{linkBoleto}}\n\n{{/linkBoleto}}Qualquer dúvida, entre em contato.\n\nAtenciosamente.',
       anexarPdf:        data.anexarPdf        ?? false,
-      notificarAdmin:   data.notificarAdmin   ?? false,
-      emailNotificacao: data.emailNotificacao || '',
+      notificarAdmin:    data.notificarAdmin    ?? false,
+      emailNotificacao:  data.emailNotificacao  || '',
+      enviarEmail:       data.enviarEmail       ?? true,
+      enviarWhatsApp:    data.enviarWhatsApp    ?? false,
+      mensagemWhatsApp:  data.mensagemWhatsApp  || 'Olá, {{nome}}! Seu boleto de {{valor}} vence em {{vencimento}}. {{#linkBoleto}}Acesse: {{linkBoleto}}{{/linkBoleto}}',
       criadaEm:       new Date().toISOString(),
     };
     db.automacoes.push(nova);

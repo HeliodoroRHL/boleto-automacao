@@ -1,15 +1,28 @@
 const express = require('express');
-const router = express.Router();
-const db = require('../db/database');
+const crypto  = require('crypto');
+const router  = express.Router();
+const db  = require('../db/database');
 const log = require('../middleware/logger');
 
-// Validação do token Asaas
+// Validação do token Asaas — comparação timing-safe (evita timing attacks)
 function validateToken(req, res, next) {
-  const token = req.headers['asaas-access-token'] || req.query.token;
+  const token    = req.headers['asaas-access-token']; // nunca aceita query string
   const expected = process.env.ASAAS_WEBHOOK_TOKEN;
-  if (expected && token !== expected) {
-    log.warn('Webhook: token inválido', { ip: req.ip });
-    return res.status(401).json({ erro: 'Token inválido' });
+  if (expected) {
+    if (!token) {
+      log.warn('Webhook: token ausente', { ip: req.ip });
+      return res.status(401).json({ erro: 'Token ausente' });
+    }
+    try {
+      const a = Buffer.from(token.padEnd(expected.length));
+      const b = Buffer.from(expected);
+      if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+        log.warn('Webhook: token inválido', { ip: req.ip });
+        return res.status(401).json({ erro: 'Token inválido' });
+      }
+    } catch {
+      return res.status(401).json({ erro: 'Token inválido' });
+    }
   }
   next();
 }
@@ -60,29 +73,9 @@ router.post('/', validateToken, (req, res) => {
   res.json({ recebido: true, evento });
 });
 
-// GET /boletos/webhook/asaas/health
-router.get('/health', (req, res) => {
+// GET /boletos/webhook/asaas/health — protegido por token
+router.get('/health', validateToken, (req, res) => {
   res.json({ status: 'ok', eventos: db.getEventos().length, timestamp: new Date().toISOString() });
-});
-
-// POST /boletos/webhook/asaas/test  — simula evento para testes
-router.post('/test', (req, res) => {
-  const { tipo = 'PAYMENT_RECEIVED' } = req.body;
-  const fakePayload = {
-    event: tipo,
-    payment: {
-      id: `fake_${Date.now()}`,
-      externalReference: req.body.boletoId || null,
-      value: 150.00,
-      paymentDate: new Date().toISOString().split('T')[0],
-      status: 'RECEIVED',
-    },
-  };
-  const handler = handlers[tipo];
-  if (handler) { try { handler(fakePayload); } catch (e) { /* ignora */ } }
-  db.addEvento({ evento: tipo, payload: fakePayload, teste: true });
-  log.info(`Evento de teste simulado: ${tipo}`);
-  res.json({ simulado: true, tipo, payload: fakePayload });
 });
 
 module.exports = router;

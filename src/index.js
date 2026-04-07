@@ -20,10 +20,15 @@ const contasRoutes     = require('./routes/contas');
 const automacoesRoutes = require('./routes/automacoes');
 const smtpRoutes       = require('./routes/smtp');
 const auditoriaRoutes  = require('./routes/auditoria');
+const whatsappRoutes   = require('./routes/whatsapp');
 const autoSvc          = require('./services/automacaoService');
+const waSvc            = require('./services/whatsappService');
 
 const app  = express();
 const PORT = process.env.PORT || 3003;
+
+// Confia no proxy reverso (nginx) — necessário para express-rate-limit ler o IP real
+app.set('trust proxy', 1);
 
 // ── Segurança: cabeçalhos HTTP ────────────────────────────────────────────────
 app.use(helmet({
@@ -72,8 +77,9 @@ app.use('/api/boletos',     requireAuth, boletosRoutes);
 app.use('/api/painel',     requireAuth, painelRoutes);
 app.use('/api/contas',     requireAuth, contasRoutes);
 app.use('/api/automacoes', requireAuth, automacoesRoutes);
-app.use('/api/smtp',      requireAuth, smtpRoutes);
-app.use('/api/auditoria', requireAuth, auditoriaRoutes);
+app.use('/api/smtp',       requireAuth, smtpRoutes);
+app.use('/api/auditoria',  requireAuth, auditoriaRoutes);
+app.use('/api/whatsapp',   requireAuth, whatsappRoutes);
 
 // Rota 404 para API
 app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada' }));
@@ -134,6 +140,8 @@ async function criarUsuarioInicial() {
 // ── Start ─────────────────────────────────────────────────────────────────────
 const server = app.listen(PORT, '127.0.0.1', async () => {
   await criarUsuarioInicial();
+  // Tenta reconectar WhatsApp se já havia sessão salva
+  waSvc.connect().catch(e => log.warn('WhatsApp: falha na reconexão inicial', { erro: e.message }));
   log.ok(`BoletoHub iniciado na porta ${PORT}`);
 });
 

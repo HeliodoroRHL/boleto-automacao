@@ -1,10 +1,20 @@
-const express   = require('express');
-const router    = express.Router();
-const asaas     = require('../services/asaasService');
-const email     = require('../services/emailService');
-const db        = require('../db/database');
-const contasDb  = require('../db/contas');
-const log       = require('../middleware/logger');
+const express    = require('express');
+const rateLimit  = require('express-rate-limit');
+const router     = express.Router();
+const asaas      = require('../services/asaasService');
+const email      = require('../services/emailService');
+const db         = require('../db/database');
+const contasDb   = require('../db/contas');
+const log        = require('../middleware/logger');
+
+// Rate limit: máx 30 e-mails manuais por minuto por IP
+const emailLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { erro: 'Muitos envios. Aguarde 1 minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Resolve a API key de uma conta pelo ID (ou usa padrão do .env)
 function resolverConta(contaId) {
@@ -97,7 +107,7 @@ router.get('/stats', async (req, res) => {
 
 // ── Email ─────────────────────────────────────────────────────────────────────
 
-router.post('/email/enviar', async (req, res) => {
+router.post('/email/enviar', emailLimiter, async (req, res) => {
   try {
     const { to, cc, subject, body, boletoId, attachPdf, contaId } = req.body;
     if (!to || !subject || !body) return res.status(400).json({ erro: 'to, subject e body são obrigatórios' });
