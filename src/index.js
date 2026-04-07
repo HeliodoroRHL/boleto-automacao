@@ -20,6 +20,7 @@ const contasRoutes     = require('./routes/contas');
 const automacoesRoutes = require('./routes/automacoes');
 const smtpRoutes       = require('./routes/smtp');
 const auditoriaRoutes  = require('./routes/auditoria');
+const configRoutes     = require('./routes/config');
 const autoSvc          = require('./services/automacaoService');
 
 const app  = express();
@@ -77,6 +78,7 @@ app.use('/api/contas',     requireAuth, contasRoutes);
 app.use('/api/automacoes', requireAuth, automacoesRoutes);
 app.use('/api/smtp',       requireAuth, smtpRoutes);
 app.use('/api/auditoria',  requireAuth, auditoriaRoutes);
+app.use('/api/config',     requireAuth, configRoutes);
 
 // Rota 404 para API
 app.use('/api', (req, res) => res.status(404).json({ erro: 'Rota não encontrada' }));

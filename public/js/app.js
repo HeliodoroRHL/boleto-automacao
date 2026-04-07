@@ -108,6 +108,10 @@ const api = {
   // Auditoria
   auditoria: (limit=100) => apiFetch(`/api/auditoria?limit=${limit}`),
 
+  // Configuração do portal
+  getConfig:    ()  => apiFetch('/api/config'),
+  salvarConfig: (b) => apiFetch('/api/config', { method:'PUT', body: JSON.stringify(b) }),
+  deletarLogo:  ()  => apiFetch('/api/config/logo', { method:'DELETE' }),
 };
 
 function q(obj) { return new URLSearchParams(Object.fromEntries(Object.entries(obj).filter(([,v])=>v))); }
@@ -183,6 +187,39 @@ function showLogin() {
   document.getElementById('login-screen').hidden=false;
   document.getElementById('app').hidden=true;
 }
+// Aplica nome do portal e logo em toda a UI
+async function aplicarConfig(cfg) {
+  if (!cfg) { try { cfg = await api.getConfig(); } catch { return; } }
+  const nome = cfg.nomePortal || 'BoletoHub';
+  // Título da aba
+  document.title = nome;
+  // Sidebar logo
+  const logoText = document.querySelector('.logo-text');
+  if (logoText) logoText.textContent = nome;
+  // Logo de login
+  const loginH1 = document.querySelector('.login-logo h1');
+  if (loginH1) loginH1.textContent = nome;
+  // Ícone/logo — substitui o elemento existente (.logo-icon ou img já inserida)
+  const sidebarSlot = document.querySelector('.sidebar-logo .logo-icon, .sidebar-logo img.logo-img');
+  const loginSlot   = document.querySelector('.login-logo .logo-icon, .login-logo img.logo-img');
+  if (cfg.logoPath) {
+    const src = `/${cfg.logoPath}?t=${cfg._t||Date.now()}`;
+    const mkImg = (alt) => {
+      const img = document.createElement('img');
+      img.src = src; img.alt = alt; img.className = 'logo-img';
+      img.style.cssText = 'width:36px;height:36px;object-fit:contain;border-radius:8px';
+      return img;
+    };
+    if (sidebarSlot) sidebarSlot.replaceWith(mkImg(nome));
+    if (loginSlot)   loginSlot.replaceWith(mkImg(nome));
+  } else {
+    // Restaura ícone padrão (letra)
+    const mkIcon = () => { const d=document.createElement('div'); d.className='logo-icon'; d.textContent=nome[0]||'B'; return d; };
+    if (sidebarSlot) sidebarSlot.replaceWith(mkIcon());
+    if (loginSlot)   loginSlot.replaceWith(mkIcon());
+  }
+}
+
 async function showApp(user) {
   state.user=user;
   document.getElementById('login-screen').hidden=true;
@@ -198,8 +235,9 @@ async function showApp(user) {
   if (btnConta  && !btnConta._bound)  { btnConta.addEventListener('click', ()=>navigate('perfil')); btnConta._bound=true; }
   if (btnLogout && !btnLogout._bound) { btnLogout.addEventListener('click', logout);                btnLogout._bound=true; }
 
-  // Carrega lista de contas disponíveis
+  // Carrega lista de contas e configuração do portal
   try { state.contas=await api.contas(); } catch {}
+  aplicarConfig();
   resetIdleTimer();
   route();
 }
@@ -1169,6 +1207,90 @@ async function pageAutomacoes() {
   renderLista();
 }
 
+// ── Página: Personalização do portal ─────────────────────────────────────────
+async function pagePersonalizacao() {
+  setTitle('Personalização'); setActive('personalizacao');
+  render(`<div class="card"><div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div></div>`);
+  let cfg = {};
+  try { cfg = await api.getConfig(); } catch(e) { render(erroCard(e.message)); return; }
+
+  const logoAtual = cfg.logoPath
+    ? `<div style="margin-bottom:12px">
+         <img src="/${esc(cfg.logoPath)}?t=${Date.now()}" alt="Logo atual" style="max-height:80px;max-width:200px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff">
+         <br><button class="btn btn-ghost btn-sm" id="btn-remover-logo" style="margin-top:8px">Remover logo</button>
+       </div>`
+    : `<p class="text-muted" style="margin-bottom:12px">Nenhuma logo cadastrada — exibindo ícone padrão.</p>`;
+
+  render(`
+    <div style="display:flex;flex-direction:column;gap:20px;max-width:540px">
+
+      <div class="card">
+        <h3 style="margin-bottom:16px">Nome do portal</h3>
+        <div class="field">
+          <label>Nome exibido no topo, na sidebar e na aba do navegador</label>
+          <input class="input" id="inp-nome-portal" value="${esc(cfg.nomePortal||'BoletoHub')}" maxlength="40" placeholder="BoletoHub">
+        </div>
+        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar nome</button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin-bottom:16px">Logo</h3>
+        ${logoAtual}
+        <div class="field">
+          <label>Enviar nova logo (PNG, JPG, SVG — máx. 2 MB)</label>
+          <input type="file" class="input" id="inp-logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="padding:6px">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+          <button class="btn btn-primary" id="btn-upload-logo">Enviar logo</button>
+          <span id="logo-status" class="text-muted" style="font-size:13px"></span>
+        </div>
+      </div>
+
+    </div>
+  `);
+
+  document.getElementById('btn-salvar-nome').addEventListener('click', async () => {
+    const nome = document.getElementById('inp-nome-portal').value.trim();
+    if (!nome) return toast('Informe um nome', 'warning');
+    try {
+      const updated = await api.salvarConfig({ nomePortal: nome });
+      await aplicarConfig(updated);
+      toast('Nome atualizado!', 'success');
+    } catch(e) { toast(e.message, 'error'); }
+  });
+
+  document.getElementById('btn-upload-logo').addEventListener('click', async () => {
+    const input = document.getElementById('inp-logo');
+    if (!input.files.length) return toast('Selecione um arquivo', 'warning');
+    const statusEl = document.getElementById('logo-status');
+    statusEl.textContent = 'Enviando...';
+    const form = new FormData();
+    form.append('logo', input.files[0]);
+    try {
+      const res = await fetch(BASE + '/api/config/logo', { method:'POST', credentials:'same-origin', body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.erro || 'Erro no upload');
+      await aplicarConfig({ ...data, _t: Date.now() });
+      toast('Logo atualizada!', 'success');
+      pagePersonalizacao();
+    } catch(e) { statusEl.textContent = ''; toast(e.message, 'error'); }
+  });
+
+  const btnRemover = document.getElementById('btn-remover-logo');
+  if (btnRemover) {
+    btnRemover.addEventListener('click', async () => {
+      if (!confirm('Remover a logo?')) return;
+      try {
+        await api.deletarLogo();
+        toast('Logo removida', 'success');
+        pagePersonalizacao();
+        // Restaura ícone padrão
+        aplicarConfig({ nomePortal: cfg.nomePortal, logoPath: null });
+      } catch(e) { toast(e.message, 'error'); }
+    });
+  }
+}
+
 // ── Página: Auditoria ─────────────────────────────────────────────────────────
 async function pageAuditoria() {
   setTitle('Auditoria de Segurança'); setActive('auditoria');
@@ -1219,8 +1341,9 @@ function route(){
     case'contas':      return pageContas();
     case'perfil':      return pagePerfil();
     case'automacoes':  return pageAutomacoes();
-    case'smtp':        return pageSmtp();
-    case'auditoria':   return pageAuditoria();
+    case'smtp':            return pageSmtp();
+    case'personalizacao':  return pagePersonalizacao();
+    case'auditoria':       return pageAuditoria();
     default:         return pageDashboard();
   }
 }
