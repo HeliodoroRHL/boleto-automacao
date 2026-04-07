@@ -1419,14 +1419,39 @@ async function pagePersonalizacao() {
           <input class="input" id="inp-nome-portal" value="${esc(cfg.nomePortal||'BoletoHub')}" maxlength="40" placeholder="BoletoHub">
         </div>
 
-        <div class="field" style="margin-top:16px">
-          <label>Rodapé dos e-mails enviados</label>
-          <input class="input" id="inp-rodape-email" value="${esc(cfg.rodapeEmail||'')}" maxlength="300"
-            placeholder="Ex: RHL Soluções Tecnológicas · (11) 99999-9999 · www.rhlsolucoes.com.br">
-          <p class="text-muted" style="font-size:12px;margin-top:5px">
-            Aparece no rodapé de todos os e-mails enviados pelo sistema. Use · para separar informações.<br>
-            Se deixar em branco, exibe: <em>${esc(cfg.nomePortal||'BoletoHub')} · Este é um e-mail automático...</em>
-          </p>
+        <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+          <p style="font-size:13px;font-weight:600;margin-bottom:10px">Rodapé dos e-mails — dados de contato</p>
+          <p class="text-muted" style="font-size:12px;margin-bottom:12px">Cada campo preenchido aparece no rodapé com seu ícone. Deixe em branco os que não quiser exibir.</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="field">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="display:inline-block;width:16px;height:16px;background:#25d366;border-radius:50%;color:#fff;font-size:9px;font-weight:bold;text-align:center;line-height:16px">W</span>
+                WhatsApp / Telefone
+              </label>
+              <input class="input" id="inp-rodape-tel" value="${esc(cfg.rodapeTelefone||'')}" placeholder="(65) 99615-2089">
+            </div>
+            <div class="field">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="display:inline-block;width:16px;height:16px;background:#2563eb;border-radius:50%;color:#fff;font-size:9px;font-weight:bold;text-align:center;line-height:16px">@</span>
+                E-mail de contato
+              </label>
+              <input class="input" id="inp-rodape-email-contato" value="${esc(cfg.rodapeEmailContato||'')}" placeholder="financeiro@suaempresa.com.br">
+            </div>
+            <div class="field">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="display:inline-block;width:16px;height:16px;background:#e1306c;border-radius:50%;color:#fff;font-size:9px;font-weight:bold;text-align:center;line-height:16px">ig</span>
+                Instagram
+              </label>
+              <input class="input" id="inp-rodape-ig" value="${esc(cfg.rodapeInstagram||'')}" placeholder="rhlsolucoestecnologicas">
+            </div>
+            <div class="field">
+              <label style="display:flex;align-items:center;gap:6px">
+                <span style="display:inline-block;width:16px;height:16px;background:#0ea5e9;border-radius:50%;color:#fff;font-size:8px;font-weight:bold;text-align:center;line-height:16px">www</span>
+                Site
+              </label>
+              <input class="input" id="inp-rodape-site" value="${esc(cfg.rodapeSite||'')}" placeholder="rhlsolucoestecnologicas.com.br">
+            </div>
+          </div>
         </div>
 
         <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar</button>
@@ -1527,10 +1552,15 @@ async function pagePersonalizacao() {
 
   document.getElementById('btn-salvar-nome').addEventListener('click', async () => {
     const nome   = document.getElementById('inp-nome-portal').value.trim();
-    const rodape = document.getElementById('inp-rodape-email').value;
     if (!nome) return toast('Informe um nome', 'warning');
     try {
-      const updated = await api.salvarConfig({ nomePortal: nome, rodapeEmail: rodape });
+      const updated = await api.salvarConfig({
+        nomePortal:         nome,
+        rodapeTelefone:     document.getElementById('inp-rodape-tel').value.trim(),
+        rodapeEmailContato: document.getElementById('inp-rodape-email-contato').value.trim(),
+        rodapeInstagram:    document.getElementById('inp-rodape-ig').value.trim(),
+        rodapeSite:         document.getElementById('inp-rodape-site').value.trim(),
+      });
       await aplicarConfig(updated);
       toast('Configurações salvas!', 'success');
     } catch(e) { toast(e.message, 'error'); }

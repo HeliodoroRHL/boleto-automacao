@@ -12,7 +12,11 @@ const DEFAULTS = {
     'Honorário de Serviço de TI - {{mes}}/{{ano}} ({{nome}})',
     'Honorário de TI e Backup em Nuvem - {{mes}}/{{ano}} ({{nome}})',
   ],
-  rodapeEmail:     '',   // Ex: "RHL Soluções · (11) 99999-9999 · www.rhl.com.br"
+  rodapeEmail:        '',  // texto livre (fallback)
+  rodapeTelefone:     '',  // Ex: (65) 99615-2089  → ícone WhatsApp
+  rodapeEmailContato: '',  // Ex: financeiro@rhl.com.br → ícone email
+  rodapeInstagram:    '',  // Ex: rhlsolucoestecnologicas → ícone Instagram
+  rodapeSite:         '',  // Ex: rhlsolucoestecnologicas.com.br → ícone globo
 };
 
 function load() {
