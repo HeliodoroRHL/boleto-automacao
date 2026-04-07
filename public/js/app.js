@@ -552,7 +552,7 @@ async function pageEmail(boletoId) {
   }
   const nomePre=cliente?.nome||boleto?.customerName||'';
   const emailPre=cliente?.email||'';
-  const assunto=boleto?`Boleto - ${moeda(boleto.value)} - Vencimento ${dataFmt(boleto.dueDate)}`:'';
+  const assunto=await montarAssunto(boleto, nomePre);
   const corpo=templateEmail(boleto,nomePre);
   const link=safeUrl(boleto?.bankSlipUrl);
   const contaAtual=state.contas.find(c=>c.id===cid);
@@ -874,6 +874,31 @@ async function testarSmtp() {
   try{ await api.testarSmtp(); toast('Conexão SMTP funcionando!','success'); }
   catch(e){ toast('Falha SMTP: '+e.message,'error'); }
   finally{ btn.disabled=false; btn.textContent='Testar SMTP'; }
+}
+
+// Monta assunto usando o modelo configurado em Personalização
+async function montarAssunto(boleto, nomeCliente) {
+  let modelo = '';
+  try {
+    const cfg = await api.getConfig();
+    modelo = cfg.modeloAssunto || '';
+  } catch {}
+  if (!modelo) return boleto ? `Boleto - ${moeda(boleto.value)} - Vencimento ${dataFmt(boleto.dueDate)}` : '';
+
+  const agora = new Date();
+  const mes   = String(agora.getMonth() + 1).padStart(2, '0');
+  const ano   = String(agora.getFullYear());
+  const valor = boleto ? moeda(boleto.value) : '';
+  const [y, m, d] = (boleto?.dueDate || '').split('-');
+  const vencimento = boleto?.dueDate ? `${d}/${m}/${y}` : '';
+  const nome = nomeCliente || '';
+
+  return modelo
+    .replace(/\{\{nome\}\}/g, nome)
+    .replace(/\{\{mes\}\}/g, mes)
+    .replace(/\{\{ano\}\}/g, ano)
+    .replace(/\{\{valor\}\}/g, valor)
+    .replace(/\{\{vencimento\}\}/g, vencimento);
 }
 
 // ── Template ──────────────────────────────────────────────────────────────────
@@ -1366,7 +1391,17 @@ async function pagePersonalizacao() {
           <label>Nome exibido no topo, na sidebar e na aba do navegador</label>
           <input class="input" id="inp-nome-portal" value="${esc(cfg.nomePortal||'BoletoHub')}" maxlength="40" placeholder="BoletoHub">
         </div>
-        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar nome</button>
+
+        <div class="field" style="margin-top:16px">
+          <label>Modelo padrão do assunto do e-mail</label>
+          <input class="input" id="inp-modelo-assunto" value="${esc(cfg.modeloAssunto||'Honorário - {{mes}}/{{ano}} ({{nome}})')}" maxlength="120" placeholder="Honorário - {{mes}}/{{ano}} ({{nome}})">
+          <p class="text-muted" style="font-size:12px;margin-top:6px">
+            Variáveis disponíveis: <code>{{nome}}</code> — nome do cliente &nbsp;·&nbsp;
+            <code>{{mes}}</code> — mês atual &nbsp;·&nbsp; <code>{{ano}}</code> — ano atual &nbsp;·&nbsp;
+            <code>{{valor}}</code> — valor do boleto &nbsp;·&nbsp; <code>{{vencimento}}</code> — data de vencimento
+          </p>
+        </div>
+        <button class="btn btn-primary" id="btn-salvar-nome" style="margin-top:14px">Salvar</button>
       </div>
 
       <div class="card">
@@ -1386,12 +1421,13 @@ async function pagePersonalizacao() {
   `);
 
   document.getElementById('btn-salvar-nome').addEventListener('click', async () => {
-    const nome = document.getElementById('inp-nome-portal').value.trim();
+    const nome   = document.getElementById('inp-nome-portal').value.trim();
+    const modelo = document.getElementById('inp-modelo-assunto').value.trim();
     if (!nome) return toast('Informe um nome', 'warning');
     try {
-      const updated = await api.salvarConfig({ nomePortal: nome });
+      const updated = await api.salvarConfig({ nomePortal: nome, modeloAssunto: modelo });
       await aplicarConfig(updated);
-      toast('Nome atualizado!', 'success');
+      toast('Configurações salvas!', 'success');
     } catch(e) { toast(e.message, 'error'); }
   });
 

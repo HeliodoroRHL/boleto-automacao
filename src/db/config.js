@@ -4,8 +4,9 @@ const path = require('path');
 const FILE = path.join(__dirname, '../../data/config.json');
 
 const DEFAULTS = {
-  nomePortal: 'BoletoHub',
-  logoPath:   null,   // caminho relativo a /public, ex: 'uploads/logo.png'
+  nomePortal:      'BoletoHub',
+  logoPath:        null,
+  modeloAssunto:   'Honorário - {{mes}}/{{ano}} ({{nome}})',
 };
 
 function load() {

@@ -32,13 +32,16 @@ router.get('/', (req, res) => {
   res.json(cfgDb.get());
 });
 
-// PUT /api/config — atualiza nome do portal
+// PUT /api/config — atualiza configurações gerais
 router.put('/', (req, res) => {
-  const { nomePortal } = req.body || {};
+  const { nomePortal, modeloAssunto } = req.body || {};
   if (nomePortal !== undefined && !String(nomePortal).trim()) {
     return res.status(400).json({ erro: 'Nome não pode ser vazio' });
   }
-  const updated = cfgDb.update({ nomePortal: String(nomePortal || '').trim() || undefined });
+  const patch = {};
+  if (nomePortal   !== undefined) patch.nomePortal   = String(nomePortal).trim();
+  if (modeloAssunto !== undefined) patch.modeloAssunto = String(modeloAssunto).trim();
+  const updated = cfgDb.update(patch);
   log.ok('Config atualizada', { nomePortal: updated.nomePortal });
   res.json(updated);
 });
