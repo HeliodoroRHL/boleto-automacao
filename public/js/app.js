@@ -14,8 +14,26 @@ const state = {
   boletosOffset: 0,
   boletosStatus: '',
   boletosTotalCount: 0,
-  editandoConta: null, // conta sendo editada no form
+  editandoConta: null,
+  privacyMode: sessionStorage.getItem('privacyMode') === '1',
 };
+
+function togglePrivacy() {
+  state.privacyMode = !state.privacyMode;
+  sessionStorage.setItem('privacyMode', state.privacyMode ? '1' : '0');
+  applyPrivacy();
+}
+function applyPrivacy() {
+  document.getElementById('content').classList.toggle('privacy-on', state.privacyMode);
+  const btn    = document.getElementById('btn-privacidade');
+  const show   = document.getElementById('prv-icon-show');
+  const hide   = document.getElementById('prv-icon-hide');
+  if (!btn) return;
+  btn.classList.toggle('ativo', state.privacyMode);
+  btn.title = state.privacyMode ? 'Mostrar valores e nomes' : 'Ocultar valores e nomes';
+  if (show) show.style.display = state.privacyMode ? 'none' : '';
+  if (hide) hide.style.display = state.privacyMode ? '' : 'none';
+}
 
 // ── Segurança ─────────────────────────────────────────────────────────────────
 function esc(v) {
@@ -108,7 +126,7 @@ function toast(msg,type='info') {
 }
 
 function setTitle(t) { document.getElementById('page-title').textContent=t; }
-function render(h)   { document.getElementById('content').innerHTML=h; }
+function render(h)   { document.getElementById('content').innerHTML=h; applyPrivacy(); }
 function setActive(p){ document.querySelectorAll('.nav-item[data-page]').forEach(el=>el.classList.toggle('active',el.dataset.page===p)); }
 
 // ── Conta selecionada ─────────────────────────────────────────────────────────
@@ -208,9 +226,15 @@ async function pageDashboard() {
       {color:'green',  icon:svgSend(), value:emailRes.totalSemana, label:'Últimos 7 dias'},
       {color:'yellow', icon:svgSend(), value:emailRes.totalMes,    label:'Este mês'},
     ] : [];
+    const hoje=new Date(), mesAtual=`${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     const rows=(lista.data||[]).map(b=>{
       const link=safeUrl(b.bankSlipUrl);
-      return `<tr><td>${esc(b.customerName)}</td><td><strong>${moeda(b.value)}</strong></td><td>${dataFmt(b.dueDate)}</td><td>${badge(b.status)}</td>
+      const isMes=(b.dueDate||'').startsWith(mesAtual);
+      return `<tr ${isMes?'style="background:#f0fdf4"':''}>
+        <td><span class="prv">${esc(b.customerName||'—')}</span></td>
+        <td><strong class="prv">${moeda(b.value)}</strong></td>
+        <td>${dataFmt(b.dueDate)}${isMes?'<span class="tag-mes-atual">Mês atual</span>':''}</td>
+        <td>${badge(b.status)}</td>
         <td>${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">Ver</a>`:''}
         <button class="btn btn-primary btn-sm" data-boleto="${esc(b.id)}">Enviar e-mail</button></td></tr>`;
     }).join('');
@@ -273,9 +297,25 @@ async function pageBoletos() {
     if(state.boletosStatus) params.status=state.boletosStatus;
     const lista=await api.boletos(params);
     state.boletosTotalCount=lista.totalCount||0;
-    const rows=(lista.data||[]).map(b=>{
+
+    // Ordena: mês atual primeiro (crescente por vencimento), depois o resto
+    const hoje2=new Date(), mesAtual2=`${hoje2.getFullYear()}-${String(hoje2.getMonth()+1).padStart(2,'0')}`;
+    const dados=[...(lista.data||[])];
+    dados.sort((a,b)=>{
+      const am=(a.dueDate||'').startsWith(mesAtual2), bm=(b.dueDate||'').startsWith(mesAtual2);
+      if(am&&!bm)return -1; if(!am&&bm)return 1;
+      return (a.dueDate||'').localeCompare(b.dueDate||'');
+    });
+
+    const rows=dados.map(b=>{
       const link=safeUrl(b.bankSlipUrl);
-      return `<tr><td>${esc(b.customerName)}</td><td><strong>${moeda(b.value)}</strong></td><td>${dataFmt(b.dueDate)}</td><td>${badge(b.status)}</td><td>${dataFmt(b.paymentDate)}</td>
+      const isMes=(b.dueDate||'').startsWith(mesAtual2);
+      return `<tr ${isMes?'style="background:#f0fdf4"':''}>
+        <td><span class="prv">${esc(b.customerName||'—')}</span></td>
+        <td><strong class="prv">${moeda(b.value)}</strong></td>
+        <td>${dataFmt(b.dueDate)}${isMes?'<span class="tag-mes-atual">Mês atual</span>':''}</td>
+        <td>${badge(b.status)}</td>
+        <td>${dataFmt(b.paymentDate)}</td>
         <td style="white-space:nowrap">${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">Ver</a>`:''}
         <button class="btn btn-primary btn-sm" data-boleto="${esc(b.id)}">Enviar email</button></td></tr>`;
     }).join('');
@@ -486,42 +526,65 @@ function renderContas(contas, editId=null) {
 async function pagePerfil() {
   setTitle('Minha Conta'); setActive('');
   render(`
-    <div style="max-width:480px;margin:0 auto">
+    <div style="max-width:500px;margin:0 auto">
+
+      <div class="perfil-banner">
+        Login atual: <strong>${esc(state.user?.email||'')}</strong>
+      </div>
+
       <div class="card">
-        <div class="card-header"><span class="card-title">Alterar dados de acesso</span></div>
+        <div class="card-header"><span class="card-title">Dados pessoais</span></div>
         <div class="card-body">
           <div class="form-grid">
             <div class="field">
-              <label>Nome</label>
+              <label>Nome de exibição</label>
               <input class="input" id="p-nome" type="text" value="${esc(state.user?.nome||'')}">
             </div>
             <div class="field">
               <label>E-mail de login</label>
-              <input class="input" id="p-email" type="email" value="${esc(state.user?.email||'')}">
+              <input class="input" id="p-email" type="email" autocomplete="email" value="${esc(state.user?.email||'')}">
+              <span class="text-muted" style="font-size:11px">Este é o e-mail usado para entrar no sistema</span>
             </div>
-            <hr style="border:none;border-top:1px solid var(--border)">
-            <p class="text-muted">Para alterar a senha, preencha os campos abaixo. Deixe em branco para manter a atual.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><span class="card-title">Alterar senha</span></div>
+        <div class="card-body">
+          <div class="form-grid">
             <div class="field">
-              <label>Nova senha</label>
-              <input class="input" id="p-nova" type="password" autocomplete="new-password" placeholder="Mín. 8 chars, maiúscula, número, especial">
+              <label>Nova senha <span class="text-muted">(deixe em branco para manter)</span></label>
+              <input class="input" id="p-nova" type="password" autocomplete="new-password" placeholder="Nova senha">
               <div id="pwd-bar" style="display:none"><div class="pwd-strength" id="pwd-strength-bar"></div><span class="pwd-hint" id="pwd-hint"></span></div>
+              <ul class="req-lista">
+                <li>Mínimo 8 caracteres</li>
+                <li>Pelo menos uma letra maiúscula (A–Z)</li>
+                <li>Pelo menos um número (0–9)</li>
+                <li>Pelo menos um caractere especial (!@#$%...)</li>
+              </ul>
             </div>
             <div class="field">
               <label>Confirmar nova senha</label>
               <input class="input" id="p-confirma" type="password" autocomplete="new-password" placeholder="Repita a nova senha">
             </div>
-            <hr style="border:none;border-top:1px solid var(--border)">
-            <div class="field">
-              <label>Senha atual * <span class="text-muted">(obrigatória para salvar)</span></label>
-              <input class="input" id="p-atual" type="password" autocomplete="current-password" placeholder="Confirme sua senha atual">
-            </div>
-            <div style="display:flex;gap:8px;padding-top:4px">
-              <button class="btn btn-primary" id="btn-salvar-perfil">Salvar alterações</button>
-              <button class="btn btn-secondary" onclick="navigate('dashboard')">Cancelar</button>
-            </div>
           </div>
         </div>
       </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-body">
+          <div class="field">
+            <label>Senha atual <span style="color:var(--danger)">*</span> <span class="text-muted">(obrigatória para salvar qualquer alteração)</span></label>
+            <input class="input" id="p-atual" type="password" autocomplete="current-password" placeholder="Digite sua senha atual para confirmar">
+          </div>
+          <div style="display:flex;gap:8px;padding-top:14px">
+            <button class="btn btn-primary" id="btn-salvar-perfil">Salvar alterações</button>
+            <button class="btn btn-secondary" onclick="navigate('dashboard')">Cancelar</button>
+          </div>
+        </div>
+      </div>
+
     </div>`);
 
   // Indicador de força de senha

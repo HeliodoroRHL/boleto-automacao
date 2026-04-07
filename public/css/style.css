@@ -199,6 +199,23 @@ tbody tr:hover td { background: #f8fafc; }
 .email-stats-grid { margin-top: -12px; }
 .email-stats-grid .stat-card { background: #f8fafc; }
 
+/* ── Modo privacidade ────────────────────────────────────────────────────────── */
+.privacy-on .prv {
+  filter: blur(6px);
+  user-select: none;
+  pointer-events: none;
+  border-radius: 3px;
+}
+.btn-privacy.ativo { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+/* ── Tag mês atual nos boletos ───────────────────────────────────────────────── */
+.tag-mes-atual { display:inline-block; background:#eff6ff; color:#2563eb; font-size:10px; font-weight:600; padding:1px 6px; border-radius:10px; vertical-align:middle; margin-left:6px; }
+
+/* ── Perfil — seções ─────────────────────────────────────────────────────────── */
+.perfil-banner { background:#f0fdf4; border:1px solid #bbf7d0; border-radius:var(--radius); padding:12px 16px; margin-bottom:16px; font-size:13px; color:#15803d; }
+.req-lista { font-size:11px; color:var(--txt-muted); margin:6px 0 0 4px; padding-left:14px; }
+.req-lista li { margin-bottom:2px; }
+
 /* ── Força de senha ──────────────────────────────────────────────────────────── */
 .pwd-strength { height: 4px; border-radius: 2px; margin-top: 6px; transition: width .3s, background .3s; }
 .pwd-strength.fraca  { width: 33%; background: var(--danger); }
