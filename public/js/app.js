@@ -71,6 +71,7 @@ const api = {
   salvarAutomacao:   (id,b) => apiFetch(`/api/automacoes/${id}`, { method:'PUT', body: JSON.stringify(b) }),
   deletarAutomacao:  (id)   => apiFetch(`/api/automacoes/${id}`, { method:'DELETE' }),
   executarAutomacao: (id)   => apiFetch(`/api/automacoes/${id}/executar`, { method:'POST' }),
+  simularAutomacao:  (id)   => apiFetch(`/api/automacoes/${id}/simular`,  { method:'POST' }),
 
   // Clientes Asaas
   listarClientes: (c) => apiFetch(`/api/painel/clientes?${q({contaId:c})}`),
@@ -743,6 +744,7 @@ async function pageAutomacoes() {
         <td>${a.ultimaExecucao?`<span class="text-muted" style="font-size:11px">${dataHora(a.ultimaExecucao)}<br>✉ ${a.ultimoResultado?.enviados??0} env, ${a.ultimoResultado?.erros??0} err</span>`:'—'}</td>
         <td style="white-space:nowrap">
           <button class="btn btn-ghost btn-sm" data-editar-auto="${esc(a.id)}">Editar</button>
+          <button class="btn btn-secondary btn-sm" data-sim-auto="${esc(a.id)}">Simular</button>
           <button class="btn btn-primary btn-sm" data-exec-auto="${esc(a.id)}">Executar</button>
           <button class="btn btn-ghost btn-sm" data-del-auto="${esc(a.id)}" style="color:var(--danger)">Excluir</button>
         </td>
@@ -767,6 +769,60 @@ async function pageAutomacoes() {
     document.querySelectorAll('[data-editar-auto]').forEach(b =>
       b.addEventListener('click', () => renderForm(automacoes.find(a=>a.id===b.dataset.editarAuto)))
     );
+
+    // ── Simular ───────────────────────────────────────────────────────────────
+    document.querySelectorAll('[data-sim-auto]').forEach(b =>
+      b.addEventListener('click', async () => {
+        b.disabled=true; b.textContent='Consultando...';
+        try {
+          const r = await api.simularAutomacao(b.dataset.simAuto);
+          const moeda = v => new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v||0);
+          const rows = r.alvos.map(a => `<tr>
+            <td>${esc(a.cliente)}</td>
+            <td style="font-size:12px">${a.email ? esc(a.email) : '<span class="badge badge-overdue">Sem e-mail</span>'}</td>
+            <td>${moeda(a.valor)}</td>
+            <td>${esc(a.vencimento)}</td>
+            <td><span class="badge ${a.tipo==='PIX'?'badge-refunded':'badge-pending'}">${a.tipo}</span></td>
+          </tr>`).join('');
+          const cor = r.total===0 ? 'var(--txt-muted)' : r.semEmail>0 ? 'var(--warning)' : 'var(--success)';
+          document.getElementById('auto-content').innerHTML = `
+            <div class="card" style="max-width:860px">
+              <div class="card-header">
+                <span class="card-title">Simulação — o que seria enviado agora</span>
+                <button class="btn btn-secondary btn-sm" id="btn-voltar-sim">Voltar</button>
+              </div>
+              <div class="card-body">
+                <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px">
+                  <div class="stat-card" style="flex:1;min-width:140px">
+                    <div class="stat-icon blue">${svgDoc()}</div>
+                    <div class="stat-info"><div class="value">${r.total}</div><div class="label">Boletos encontrados</div></div>
+                  </div>
+                  <div class="stat-card" style="flex:1;min-width:140px">
+                    <div class="stat-icon green">${svgSend()}</div>
+                    <div class="stat-info"><div class="value">${r.comEmail}</div><div class="label">Receberiam e-mail</div></div>
+                  </div>
+                  <div class="stat-card" style="flex:1;min-width:140px">
+                    <div class="stat-icon ${r.semEmail>0?'red':'green'}">${svgAlert()}</div>
+                    <div class="stat-info"><div class="value">${r.semEmail}</div><div class="label">Sem e-mail cadastrado</div></div>
+                  </div>
+                </div>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#15803d">
+                  <strong>Mês de referência:</strong> ${esc(r.mesReferencia)} — apenas boletos com vencimento em <strong>${esc(r.prefixoMes)}</strong> são incluídos.
+                </div>
+                ${r.total===0
+                  ? `<div class="empty-state"><p>Nenhum boleto encontrado para ${esc(r.mesReferencia)}.<br>Verifique os filtros da automação.</p></div>`
+                  : `<div class="table-wrap"><table>
+                      <thead><tr><th>Cliente</th><th>E-mail</th><th>Valor</th><th>Vencimento</th><th>Tipo</th></tr></thead>
+                      <tbody>${rows}</tbody>
+                    </table></div>`}
+              </div>
+            </div>`;
+          document.getElementById('btn-voltar-sim').addEventListener('click', () => renderLista());
+        } catch(e) { toast('Erro na simulação: '+e.message,'error'); }
+        finally { b.disabled=false; b.textContent='Simular'; }
+      })
+    );
+
     document.querySelectorAll('[data-exec-auto]').forEach(b =>
       b.addEventListener('click', async () => {
         if (!confirm('Executar agora? E-mails reais serão enviados.')) return;

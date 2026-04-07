@@ -57,6 +57,19 @@ router.post('/:id/executar', async (req, res) => {
   }
 });
 
+// POST /api/automacoes/:id/simular — pré-visualiza sem enviar e-mails
+router.post('/:id/simular', async (req, res) => {
+  const auto = autoDb.get(req.params.id);
+  if (!auto) return res.status(404).json({ erro: 'Automação não encontrada' });
+  try {
+    const resultado = await autoSvc.simularAutomacao(auto);
+    res.json(resultado);
+  } catch (err) {
+    log.error('Erro na simulação', { erro: err.message });
+    res.status(502).json({ erro: err.message });
+  }
+});
+
 // DELETE /api/automacoes/:id
 router.delete('/:id', (req, res) => {
   autoDb.delete(req.params.id) ? res.json({ ok: true }) : res.status(404).json({ erro: 'Não encontrada' });

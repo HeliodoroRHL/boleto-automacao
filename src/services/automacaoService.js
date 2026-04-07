@@ -198,4 +198,46 @@ async function executarAgendadas() {
   }
 }
 
-module.exports = { executarAutomacao, executarAgendadas };
+// ── Simulação: mostra o que seria enviado sem mandar nenhum e-mail ────────────
+async function simularAutomacao(auto) {
+  const { apiKey } = resolverConta(auto.contaId);
+  let pagamentos = await buscarPagamentos(auto, apiKey);
+
+  // Mesma regra inviolável do mês atual
+  const prefixoMes = mesAtualPrefix();
+  pagamentos = pagamentos.filter(p => p.dueDate && p.dueDate.startsWith(prefixoMes));
+
+  if (auto.clientesFiltro?.length) {
+    pagamentos = pagamentos.filter(p => auto.clientesFiltro.includes(p.customer));
+  }
+
+  const agora = new Date();
+  const mesLabel = agora.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+  const alvos = [];
+
+  for (const pag of pagamentos) {
+    const cliente = pag.customer ? await asaas.getCliente(pag.customer, apiKey) : null;
+    const [y, m, d] = (pag.dueDate || '').split('-');
+    alvos.push({
+      id:         pag.id,
+      cliente:    cliente?.name || '—',
+      email:      cliente?.email || null,
+      valor:      pag.value || 0,
+      vencimento: pag.dueDate ? `${d}/${m}/${y}` : '—',
+      tipo:       pag.billingType === 'PIX' ? 'PIX' : 'Boleto',
+      temEmail:   !!cliente?.email,
+    });
+  }
+
+  const semEmail = alvos.filter(a => !a.temEmail).length;
+  return {
+    mesReferencia: mesLabel,
+    prefixoMes,
+    total:    alvos.length,
+    comEmail: alvos.length - semEmail,
+    semEmail,
+    alvos,
+  };
+}
+
+module.exports = { executarAutomacao, executarAgendadas, simularAutomacao };
