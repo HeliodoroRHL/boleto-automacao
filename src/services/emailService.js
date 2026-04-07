@@ -47,56 +47,44 @@ function nomePdf(clienteNome, boletoId) {
   return `boleto-${boletoId || 'documento'}.pdf`;
 }
 
-// SVGs dos logos de cada rede/contato — embutidos como data URI base64
-function svgUri(svgStr) {
-  return 'data:image/svg+xml;base64,' + Buffer.from(svgStr).toString('base64');
-}
+// Ícone outline puro HTML/CSS — compatível com Outlook, Gmail, Apple Mail, todos
+// Usando bordas e pseudo-formas via células de tabela (sem imagem, sem SVG)
+const ICONES = {
+  // ícone câmera (Instagram) — quadrado arredondado com círculo interno + ponto
+  instagram:
+    `<table cellpadding="0" cellspacing="0" style="display:inline-table;vertical-align:middle">` +
+    `<tr><td style="width:18px;height:18px;border:1.5px solid #888;border-radius:4px;text-align:center;vertical-align:middle;line-height:18px;font-size:11px;color:#888;font-family:Arial">` +
+    `&#9711;` + // ○ círculo outline (câmera)
+    `</td></tr></table>`,
 
-const ICON_WHATSAPP = svgUri(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
-  `<rect width="24" height="24" rx="6" fill="#25d366"/>` +
-  `<path fill="white" d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.39-1.48-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.61-.92-2.21-.24-.58-.49-.5-.67-.51-.17-.01-.37-.01-.57-.01-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.29.17-1.41-.07-.12-.27-.2-.57-.35z"/>` +
-  `</svg>`
-);
+  // ícone telefone/WhatsApp — fone outline
+  whatsapp:
+    `<table cellpadding="0" cellspacing="0" style="display:inline-table;vertical-align:middle">` +
+    `<tr><td style="width:18px;height:18px;border:1.5px solid #888;border-radius:4px;text-align:center;vertical-align:middle;line-height:18px;font-size:11px;color:#888;font-family:Arial">` +
+    `&#9990;` + // ☎ telefone
+    `</td></tr></table>`,
 
-const ICON_EMAIL = svgUri(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
-  `<rect width="24" height="24" rx="6" fill="#2563eb"/>` +
-  `<rect x="4" y="7" width="16" height="11" rx="1.5" fill="none" stroke="white" stroke-width="1.5"/>` +
-  `<polyline points="4,7 12,14 20,7" fill="none" stroke="white" stroke-width="1.5"/>` +
-  `</svg>`
-);
+  // ícone envelope (email)
+  email:
+    `<table cellpadding="0" cellspacing="0" style="display:inline-table;vertical-align:middle">` +
+    `<tr><td style="width:18px;height:18px;border:1.5px solid #888;border-radius:4px;text-align:center;vertical-align:middle;line-height:18px;font-size:11px;color:#888;font-family:Arial">` +
+    `&#9993;` + // ✉ envelope
+    `</td></tr></table>`,
 
-const ICON_INSTAGRAM = svgUri(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
-  `<defs><linearGradient id="g" x1="0%" y1="100%" x2="100%" y2="0%">` +
-  `<stop offset="0%" stop-color="#f09433"/><stop offset="33%" stop-color="#e6683c"/>` +
-  `<stop offset="66%" stop-color="#dc2743"/><stop offset="100%" stop-color="#bc1888"/>` +
-  `</linearGradient></defs>` +
-  `<rect width="24" height="24" rx="6" fill="url(#g)"/>` +
-  `<rect x="4" y="4" width="16" height="16" rx="5" fill="none" stroke="white" stroke-width="1.5"/>` +
-  `<circle cx="12" cy="12" r="4" fill="none" stroke="white" stroke-width="1.5"/>` +
-  `<circle cx="17" cy="7" r="1.2" fill="white"/>` +
-  `</svg>`
-);
+  // ícone globo (site)
+  globe:
+    `<table cellpadding="0" cellspacing="0" style="display:inline-table;vertical-align:middle">` +
+    `<tr><td style="width:18px;height:18px;border:1.5px solid #888;border-radius:4px;text-align:center;vertical-align:middle;line-height:18px;font-size:11px;color:#888;font-family:Arial">` +
+    `&#8853;` + // ⊕ círculo com cruz (globo)
+    `</td></tr></table>`,
+};
 
-const ICON_GLOBE = svgUri(
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">` +
-  `<rect width="24" height="24" rx="6" fill="#0ea5e9"/>` +
-  `<circle cx="12" cy="12" r="6.5" fill="none" stroke="white" stroke-width="1.4"/>` +
-  `<ellipse cx="12" cy="12" rx="3" ry="6.5" fill="none" stroke="white" stroke-width="1.4"/>` +
-  `<line x1="5.5" y1="12" x2="18.5" y2="12" stroke="white" stroke-width="1.4"/>` +
-  `<line x1="6.5" y1="8.5" x2="17.5" y2="8.5" stroke="white" stroke-width="1"/>` +
-  `<line x1="6.5" y1="15.5" x2="17.5" y2="15.5" stroke="white" stroke-width="1"/>` +
-  `</svg>`
-);
-
-function itemRodape(iconUri, texto) {
+function itemRodape(icone, texto) {
   return `<td style="padding:0 10px;white-space:nowrap;vertical-align:middle">` +
-    `<img src="${iconUri}" width="18" height="18" alt="" border="0" ` +
-    `style="display:inline-block;vertical-align:middle;width:18px;height:18px">` +
-    `&nbsp;<span style="color:#475569;font-size:12px;vertical-align:middle;font-family:Arial,sans-serif">${texto}</span>` +
-    `</td>`;
+    `<table cellpadding="0" cellspacing="0"><tr>` +
+    `<td style="vertical-align:middle;padding-right:5px">${icone}</td>` +
+    `<td style="vertical-align:middle;color:#555;font-size:12px;font-family:Arial,sans-serif">${texto}</td>` +
+    `</tr></table></td>`;
 }
 
 function montarRodape(cfg, nomePortal) {
@@ -106,10 +94,10 @@ function montarRodape(cfg, nomePortal) {
   const site = (cfg.rodapeSite         || '').trim();
 
   const celulas = [];
-  if (tel)  celulas.push(itemRodape(ICON_WHATSAPP,  tel.replace(/&/g,'&amp;')));
-  if (mail) celulas.push(itemRodape(ICON_EMAIL,     mail.replace(/&/g,'&amp;')));
-  if (ig)   celulas.push(itemRodape(ICON_INSTAGRAM, `@${ig.replace(/&/g,'&amp;')}`));
-  if (site) celulas.push(itemRodape(ICON_GLOBE,     site.replace(/&/g,'&amp;')));
+  if (tel)  celulas.push(itemRodape(ICONES.whatsapp,  tel.replace(/&/g,'&amp;')));
+  if (mail) celulas.push(itemRodape(ICONES.email,     mail.replace(/&/g,'&amp;')));
+  if (ig)   celulas.push(itemRodape(ICONES.instagram, `@${ig.replace(/&/g,'&amp;')}`));
+  if (site) celulas.push(itemRodape(ICONES.globe,     site.replace(/&/g,'&amp;')));
 
   if (celulas.length > 0) {
     return `

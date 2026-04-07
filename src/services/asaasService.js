@@ -32,9 +32,11 @@ module.exports = {
   },
 
   // Lista pagamentos de uma conta (boletos, PIX, cartão — todos os tipos)
-  async listarBoletos({ status, offset = 0, limit = 50, apiKey } = {}) {
+  async listarBoletos({ status, offset = 0, limit = 50, dueDateGe, dueDateLe, apiKey } = {}) {
     const params = { offset, limit };
-    if (status) params.status = status;
+    if (status)    params.status    = status;
+    if (dueDateGe) params.dueDateGe = dueDateGe;
+    if (dueDateLe) params.dueDateLe = dueDateLe;
     const { data } = await client(apiKey).get('/payments', { params });
     return data;
   },

@@ -32,9 +32,9 @@ function resolverConta(contaId) {
 
 router.get('/boletos', async (req, res) => {
   try {
-    const { contaId, status, offset, limit } = req.query;
+    const { contaId, status, offset, limit, dueDateGe, dueDateLe } = req.query;
     const { apiKey } = resolverConta(contaId);
-    const data = await asaas.listarBoletos({ status, offset: +offset || 0, limit: +limit || 50, apiKey });
+    const data = await asaas.listarBoletos({ status, offset: +offset || 0, limit: +limit || 50, dueDateGe, dueDateLe, apiKey });
 
     // Garante que customerName seja preenchido — às vezes o Asaas retorna nulo
     if (data.data) {

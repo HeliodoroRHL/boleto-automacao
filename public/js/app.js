@@ -326,7 +326,7 @@ async function aplicarConfig(cfg) {
   const sidebarSlot = document.querySelector('.sidebar-logo .logo-icon, .sidebar-logo img.logo-img');
   const loginSlot   = document.querySelector('.login-logo .logo-icon, .login-logo img.logo-img');
   if (cfg.logoPath) {
-    const src = `/${cfg.logoPath}?t=${cfg._t||Date.now()}`;
+    const src = `${BASE}/${cfg.logoPath}?t=${cfg._t||Date.now()}`;
     const mkImg = (alt) => {
       const img = document.createElement('img');
       img.src = src; img.alt = alt; img.className = 'logo-img';
@@ -394,7 +394,11 @@ async function pageDashboard() {
     const cid=getContaId();
     const [stats, lista, emailRes] = await Promise.all([
       api.stats(cid),
-      api.boletos({limit:10,offset:0,...(cid?{contaId:cid}:{})}),
+      api.boletos((() => {
+        const h=new Date(), y=h.getFullYear(), m=String(h.getMonth()+1).padStart(2,'0');
+        const fim=new Date(y,h.getMonth()+1,0).toISOString().split('T')[0];
+        return {limit:10,offset:0,dueDateGe:`${y}-${m}-01`,dueDateLe:fim,...(cid?{contaId:cid}:{})};
+      })()),
       api.emailResumo().catch(()=>null),
     ]);
     const bCards=[
@@ -1404,7 +1408,7 @@ async function pagePersonalizacao() {
 
   const logoAtual = cfg.logoPath
     ? `<div style="margin-bottom:12px">
-         <img src="/${esc(cfg.logoPath)}?t=${Date.now()}" alt="Logo atual" style="max-height:80px;max-width:200px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff">
+         <img src="${BASE}/${esc(cfg.logoPath)}?t=${Date.now()}" alt="Logo atual" style="max-height:80px;max-width:200px;object-fit:contain;border:1px solid var(--border);border-radius:8px;padding:6px;background:#fff">
          <br><button class="btn btn-ghost btn-sm" id="btn-remover-logo" style="margin-top:8px">Remover logo</button>
        </div>`
     : `<p class="text-muted" style="margin-bottom:12px">Nenhuma logo cadastrada — exibindo ícone padrão.</p>`;
