@@ -116,6 +116,11 @@ function montarRodape(cfg, nomePortal) {
   if (ig)   celulas.push(itemRodape(ICONES.instagram, `@${ig.replace(/&/g,'&amp;')}`));
   if (site) celulas.push(itemRodape(ICONES.globe,     site.replace(/&/g,'&amp;')));
 
+  // Disclaimer sempre fixo no rodapé
+  const disclaimer = `<p style="margin:10px 0 0 0;font-size:11px;color:#aaa;font-family:Arial,sans-serif">` +
+    `${nomePortal} &nbsp;&middot;&nbsp; Este &eacute; um e-mail autom&aacute;tico, n&atilde;o responda a esta mensagem.` +
+    `</p>`;
+
   if (celulas.length > 0) {
     return `
       <table cellpadding="0" cellspacing="0" width="100%">
@@ -124,19 +129,15 @@ function montarRodape(cfg, nomePortal) {
             Acesse nossas redes e contatos
           </p>
           <table cellpadding="0" cellspacing="0"><tr>${celulas.join('')}</tr></table>
+          ${disclaimer}
         </td></tr>
       </table>`;
   }
 
-  // Fallback: texto livre ou padrão
-  const txt = cfg.rodapeEmail
-    ? cfg.rodapeEmail.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    : `${nomePortal} &nbsp;&middot;&nbsp; Este &eacute; um e-mail autom&aacute;tico, n&atilde;o responda.`;
-
   return `
     <table cellpadding="0" cellspacing="0" width="100%">
       <tr><td align="center" style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:14px 32px;color:#94a3b8;font-size:12px">
-        ${txt}
+        ${disclaimer}
       </td></tr>
     </table>`;
 }
