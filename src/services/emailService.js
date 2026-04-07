@@ -1,6 +1,9 @@
 const nodemailer = require('nodemailer');
+const fs         = require('fs');
+const path       = require('path');
 const db         = require('../db/database');
 const smtpDb     = require('../db/smtp');
+const cfgDb      = require('../db/config');
 
 function criarTransporte() {
   // Prioridade: config salva na UI > variáveis de ambiente
@@ -48,10 +51,52 @@ function nomePdf(clienteNome, boletoId) {
   return `boleto-${boletoId || 'documento'}.pdf`;
 }
 
-function textoParaHtml(texto) {
-  return `<!DOCTYPE html><html><body style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b;line-height:1.7;max-width:600px;margin:0 auto;padding:24px">
-${texto.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}
-</body></html>`;
+// Monta HTML do email com layout e logo da empresa
+function montarHtmlEmail(body, nomePortal, temLogo) {
+  const corpoHtml = body
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>');
+
+  const logoHtml = temLogo
+    ? `<img src="cid:logo_empresa" alt="${nomePortal}" style="max-height:60px;max-width:200px;object-fit:contain;display:block">`
+    : `<span style="font-size:20px;font-weight:700;color:#2563eb">${nomePortal}</span>`;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">
+
+        <!-- Cabeçalho com logo -->
+        <tr>
+          <td style="background:#2563eb;padding:24px 32px;text-align:left">
+            ${logoHtml}
+          </td>
+        </tr>
+
+        <!-- Corpo -->
+        <tr>
+          <td style="padding:32px;color:#1e293b;font-size:15px;line-height:1.75">
+            ${corpoHtml}
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 32px;text-align:center;color:#94a3b8;font-size:12px">
+            ${nomePortal} &nbsp;·&nbsp; Este é um e-mail automático, não responda a esta mensagem.
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
 
 module.exports = {
@@ -59,20 +104,44 @@ module.exports = {
     const transport = criarTransporte();
     const from      = resolverFrom(emailFromOverride);
 
+    // Carrega config do portal para o layout do email
+    const cfg        = cfgDb.get();
+    const nomePortal = cfg.nomePortal || 'BoletoHub';
+    const logoPath   = cfg.logoPath
+      ? path.join(__dirname, '../../public', cfg.logoPath)
+      : null;
+    const temLogo = logoPath && fs.existsSync(logoPath);
+
+    const attachments = [];
+
+    // Logo embutida como CID (funciona mesmo sem domínio público)
+    if (temLogo) {
+      attachments.push({
+        filename:    path.basename(logoPath),
+        path:        logoPath,
+        cid:         'logo_empresa',
+      });
+    }
+
+    // PDF do boleto
+    if (pdfBuffer) {
+      attachments.push({
+        filename:           nomePdf(clienteNome, boletoId),
+        content:            pdfBuffer,
+        contentType:        'application/pdf',
+        contentDisposition: 'attachment',
+      });
+    }
+
     await transport.sendMail({
       from,
       to,
-      cc:          cc || undefined,
+      cc:           cc || undefined,
       subject,
-      text:        body,
-      html:        textoParaHtml(body),
+      text:         body,
+      html:         montarHtmlEmail(body, nomePortal, temLogo),
       textEncoding: 'base64',
-      attachments: pdfBuffer ? [{
-        filename:    nomePdf(clienteNome, boletoId),
-        content:     pdfBuffer,
-        contentType: 'application/pdf',
-        contentDisposition: 'attachment',
-      }] : [],
+      attachments,
     });
 
     db.addHistoricoEmail({ to, cc, subject, boletoId, clienteNome, comPdf: !!pdfBuffer, from, status: 'enviado' });

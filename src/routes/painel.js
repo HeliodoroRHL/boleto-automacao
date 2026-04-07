@@ -103,6 +103,50 @@ router.get('/clientes', async (req, res) => {
   }
 });
 
+// ── Cobranças (criar) ─────────────────────────────────────────────────────────
+
+// POST /api/painel/cobrancas — cria uma nova cobrança no Asaas
+router.post('/cobrancas', async (req, res) => {
+  try {
+    const { contaId, customer, customerName, customerCpfCnpj, customerEmail,
+            billingType, value, dueDate, description } = req.body || {};
+
+    if (!billingType || !value || !dueDate) {
+      return res.status(400).json({ erro: 'billingType, value e dueDate são obrigatórios' });
+    }
+
+    const { apiKey } = resolverConta(contaId);
+    let customerId = customer;
+
+    // Se não veio um ID de cliente, cria um novo no Asaas
+    if (!customerId) {
+      if (!customerName) return res.status(400).json({ erro: 'Informe o cliente ou o nome para criar um novo' });
+      const novo = await asaas.criarCliente({
+        name:     customerName,
+        cpfCnpj:  customerCpfCnpj || undefined,
+        email:    customerEmail   || undefined,
+        apiKey,
+      });
+      customerId = novo.id;
+    }
+
+    const pagamento = await asaas.criarPagamento({
+      customer:    customerId,
+      billingType,
+      value:       Number(value),
+      dueDate,
+      description: description || undefined,
+      apiKey,
+    });
+
+    log.ok('Cobrança criada', { id: pagamento.id, value, billingType, contaId });
+    res.json(pagamento);
+  } catch (e) {
+    log.error('Erro ao criar cobrança', { erro: e.message });
+    res.status(e.status || 502).json({ erro: e.response?.data?.errors?.[0]?.description || e.message });
+  }
+});
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 router.get('/stats', async (req, res) => {

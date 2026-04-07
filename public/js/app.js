@@ -229,6 +229,9 @@ const api = {
   salvarConfig: (b) => apiFetch('/api/config', { method:'PUT', body: JSON.stringify(b) }),
   deletarLogo:  ()  => apiFetch('/api/config/logo', { method:'DELETE' }),
 
+  // Cobranças
+  criarCobranca: (b) => apiFetch('/api/painel/cobrancas', { method:'POST', body: JSON.stringify(b) }),
+
   // PIX copia e cola
   pixQrCode: (id, c) => apiFetch(`/api/painel/boletos/${id}/pix?${q({contaId:c})}`),
 };
@@ -418,15 +421,15 @@ async function pageDashboard() {
     }).join('');
     const emailRows = (emailRes?.recentes||[]).map(e=>`
       <tr>
-        <td>${esc(e.cliente||e.to)}</td>
-        <td class="text-muted" style="font-size:12px">${esc(e.to)}</td>
-        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.assunto||'—')}</td>
+        <td><span class="prv">${esc(e.cliente||e.to)}</span></td>
+        <td class="text-muted prv" style="font-size:12px">${esc(e.to)}</td>
+        <td class="prv" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.assunto||'—')}</td>
         <td>${dataHora(e.enviadoEm)}</td>
         <td>${e.comPdf?'<span class="badge badge-pending">PDF</span>':''}</td>
       </tr>`).join('');
     document.getElementById('content').innerHTML = contaBar() + `
-      <div class="stats-grid">${bCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>
-      ${eCards.length?`<div class="stats-grid email-stats-grid">${eCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>`:''}
+      <div class="stats-grid">${bCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value prv">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>
+      ${eCards.length?`<div class="stats-grid email-stats-grid">${eCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value prv">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
         <div class="card">
           <div class="card-header"><span class="card-title">Boletos Recentes</span><button class="btn btn-secondary btn-sm" id="btn-ver-todos">Ver todos</button></div>
@@ -602,8 +605,8 @@ async function pageHistorico() {
   try {
     const hist=await api.historico();
     const rows=hist.map(h=>`<tr>
-      <td>${dataHora(h.enviadoEm)}</td><td>${esc(h.to)}</td><td>${esc(h.cc)||'—'}</td>
-      <td>${esc(h.subject)}</td><td>${esc(h.clienteNome)||'—'}</td>
+      <td>${dataHora(h.enviadoEm)}</td><td class="prv">${esc(h.to)}</td><td class="prv">${esc(h.cc)||'—'}</td>
+      <td class="prv">${esc(h.subject)}</td><td class="prv">${esc(h.clienteNome)||'—'}</td>
       <td>${h.comPdf?'<span class="badge badge-received">Sim</span>':'<span class="badge badge-cancelled">Nao</span>'}</td></tr>`).join('');
     document.querySelector('.card').innerHTML=`
       <div class="card-header"><span class="card-title">${hist.length} e-mail(s)</span></div>
@@ -628,9 +631,9 @@ async function pageContas() {
 function renderContas(contas, editId=null) {
   const rows=contas.map(c=>`<tr>
     <td><strong>${esc(c.nome)}</strong></td>
-    <td class="cnpj">${formatCnpj(c.cnpj||'')}</td>
-    <td class="key-masked">${esc(c.asaasApiKey)}</td>
-    <td>${c.emailFrom?esc(c.emailFrom):'<span class="text-muted">Padrão</span>'}</td>
+    <td class="cnpj prv">${formatCnpj(c.cnpj||'')}</td>
+    <td class="key-masked prv">${esc(c.asaasApiKey)}</td>
+    <td class="prv">${c.emailFrom?esc(c.emailFrom):'<span class="text-muted">Padrão</span>'}</td>
     <td>${c.ativa?'<span class="badge badge-received">Ativa</span>':'<span class="badge badge-cancelled">Inativa</span>'}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-ghost btn-sm" data-testar="${esc(c.id)}">Testar</button>
@@ -1209,8 +1212,11 @@ async function pageAutomacoes() {
             </div>
             <div class="field" style="grid-column:1/-1">
               <label>Assunto do e-mail</label>
-              <input class="input" id="f-assunto-auto" value="${esc(a?.assunto||'Seu boleto de {{mes}}/{{ano}} está disponível')}">
-              <span class="text-muted" style="font-size:11px">Variáveis: {{nome}} {{valor}} {{vencimento}} {{mes}} {{ano}} {{tipoPagamento}}</span>
+              <div style="display:flex;gap:6px;align-items:center">
+                <input class="input" id="f-assunto-auto" value="${esc(a?.assunto||'Seu boleto de {{mes}}/{{ano}} está disponível')}" list="datalist-modelos-auto" style="flex:1">
+                <datalist id="datalist-modelos-auto"></datalist>
+              </div>
+              <span class="text-muted" style="font-size:11px">Variáveis: {{nome}} {{valor}} {{vencimento}} {{mes}} {{ano}} {{tipoPagamento}} &nbsp;·&nbsp; <span style="color:var(--primary)">Ou selecione um modelo salvo ↑</span></span>
             </div>
             <div class="field" style="grid-column:1/-1">
               <label>Corpo do e-mail</label>
@@ -1257,6 +1263,14 @@ async function pageAutomacoes() {
       </div>`;
 
     document.getElementById('btn-cancelar-auto').addEventListener('click', () => renderLista());
+
+    // Popula datalist com modelos de assunto salvos em Personalização
+    api.getConfig().then(cfg => {
+      const dl = document.getElementById('datalist-modelos-auto');
+      if (!dl) return;
+      const lista = Array.isArray(cfg.modelosAssunto) ? cfg.modelosAssunto : (cfg.modeloAssunto ? [cfg.modeloAssunto] : []);
+      dl.innerHTML = lista.map(m => `<option value="${esc(m)}">`).join('');
+    }).catch(() => {});
 
     // Mostra/oculta campos conforme gatilho selecionado
     document.getElementById('f-gatilho-auto').addEventListener('change', e => {
@@ -1531,6 +1545,170 @@ async function pagePersonalizacao() {
 }
 
 // ── Página: Auditoria ─────────────────────────────────────────────────────────
+// ── Página: Nova Cobrança ─────────────────────────────────────────────────────
+async function pageNovaCobranca() {
+  setTitle('Nova Cobrança'); setActive('nova-cobranca');
+  render(`<div class="card"><div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div></div>`);
+
+  let clientes = [];
+  let contaIdAtual = getContaId();
+
+  async function carregarClientes(cid) {
+    try {
+      const r = await api.listarClientes(cid);
+      clientes = r.data || [];
+    } catch { clientes = []; }
+  }
+
+  await carregarClientes(contaIdAtual);
+
+  function renderPagina(resultado = null) {
+    const hoje = new Date().toISOString().split('T')[0];
+    const optClientes = clientes.map(c =>
+      `<option value="${esc(c.id)}">${esc(c.name)}${c.cpfCnpj ? ' — ' + esc(c.cpfCnpj) : ''}</option>`
+    ).join('');
+
+    const resultHtml = resultado
+      ? resultado.erro
+        ? `<div class="alert alert-error" style="margin-bottom:16px">${esc(resultado.erro)}</div>`
+        : `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:16px;margin-bottom:16px">
+             <strong style="color:#166534">Cobrança criada com sucesso!</strong><br>
+             <span class="text-muted" style="font-size:13px">ID: ${esc(resultado.id)} &nbsp;·&nbsp; Status: ${esc(resultado.status)}</span>
+             ${resultado.bankSlipUrl ? `<br><a href="${esc(resultado.bankSlipUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="margin-top:10px">Ver boleto</a>` : ''}
+             ${resultado.invoiceUrl  ? `<br><a href="${esc(resultado.invoiceUrl)}"  target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" style="margin-top:10px">Ver fatura</a>` : ''}
+             <button class="btn btn-primary btn-sm" id="btn-enviar-email-cobr" data-boleto="${esc(resultado.id)}" style="margin-top:10px">Enviar e-mail</button>
+           </div>`
+      : '';
+
+    render(contaBar() + `
+      <div style="max-width:600px">
+        ${resultHtml}
+        <div class="card">
+          <h3 style="margin-bottom:20px">Nova Cobrança</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+            <div class="field" style="grid-column:1/-1">
+              <label>Cliente existente</label>
+              <select class="input" id="cobr-cliente-sel">
+                <option value="">— Selecionar da lista —</option>
+                ${optClientes}
+              </select>
+              <span class="text-muted" style="font-size:12px;margin-top:4px;display:block">Ou preencha abaixo para criar novo cliente</span>
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label>Nome do novo cliente <span class="text-muted">(se não selecionado acima)</span></label>
+              <input class="input" id="cobr-nome" placeholder="Nome completo ou razão social">
+            </div>
+
+            <div class="field">
+              <label>CPF / CNPJ</label>
+              <input class="input" id="cobr-cpfcnpj" placeholder="000.000.000-00" maxlength="18">
+            </div>
+
+            <div class="field">
+              <label>E-mail do cliente</label>
+              <input class="input" id="cobr-email" type="email" placeholder="cliente@email.com">
+            </div>
+
+            <div class="field">
+              <label>Tipo de cobrança</label>
+              <select class="input" id="cobr-tipo">
+                <option value="BOLETO">Boleto bancário</option>
+                <option value="PIX">PIX</option>
+                <option value="UNDEFINED">Boleto + PIX (cliente escolhe)</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label>Valor (R$)</label>
+              <input class="input" id="cobr-valor" type="number" step="0.01" min="0.01" placeholder="0,00">
+            </div>
+
+            <div class="field">
+              <label>Vencimento</label>
+              <input class="input" id="cobr-vencimento" type="date" value="${hoje}">
+            </div>
+
+            <div class="field" style="grid-column:1/-1">
+              <label>Descrição <span class="text-muted">(opcional)</span></label>
+              <input class="input" id="cobr-descricao" placeholder="Ex: Honorário de TI - Abril/2026">
+            </div>
+
+          </div>
+          <div style="display:flex;gap:8px;margin-top:20px;align-items:center;flex-wrap:wrap">
+            <button class="btn btn-primary" id="btn-criar-cobr">Criar cobrança</button>
+            <span id="cobr-status" class="text-muted" style="font-size:13px"></span>
+          </div>
+        </div>
+      </div>
+    `);
+    bindContaBar();
+
+    // Trocar conta recarrega lista de clientes
+    document.getElementById('conta-sel')?.addEventListener('change', async e => {
+      contaIdAtual = e.target.value;
+      state.contaId = contaIdAtual;
+      sessionStorage.setItem('contaId', contaIdAtual);
+      await carregarClientes(contaIdAtual);
+      renderPagina();
+    });
+
+    document.getElementById('btn-criar-cobr').addEventListener('click', async () => {
+      const sel        = document.getElementById('cobr-cliente-sel').value;
+      const nome       = document.getElementById('cobr-nome').value.trim();
+      const cpfcnpj    = document.getElementById('cobr-cpfcnpj').value.trim();
+      const emailCobr  = document.getElementById('cobr-email').value.trim();
+      const tipo       = document.getElementById('cobr-tipo').value;
+      const valor      = parseFloat(document.getElementById('cobr-valor').value);
+      const venc       = document.getElementById('cobr-vencimento').value;
+      const descricao  = document.getElementById('cobr-descricao').value.trim();
+      const statusEl   = document.getElementById('cobr-status');
+
+      if (!tipo || !valor || !venc) return toast('Preencha tipo, valor e vencimento', 'warning');
+      if (!sel && !nome) return toast('Selecione um cliente ou informe o nome para criar novo', 'warning');
+
+      statusEl.textContent = 'Criando...';
+      document.getElementById('btn-criar-cobr').disabled = true;
+
+      try {
+        const payload = {
+          contaId:         contaIdAtual || undefined,
+          billingType:     tipo,
+          value:           valor,
+          dueDate:         venc,
+          description:     descricao || undefined,
+          customer:        sel || undefined,
+          customerName:    sel ? undefined : nome,
+          customerCpfCnpj: sel ? undefined : (cpfcnpj || undefined),
+          customerEmail:   sel ? undefined : (emailCobr || undefined),
+        };
+        const res = await api.criarCobranca(payload);
+        statusEl.textContent = '';
+        document.getElementById('btn-criar-cobr').disabled = false;
+        renderPagina(res);
+        // Recarrega lista de clientes (pode ter sido criado um novo)
+        await carregarClientes(contaIdAtual);
+        toast('Cobrança criada!', 'success');
+      } catch(e) {
+        statusEl.textContent = '';
+        document.getElementById('btn-criar-cobr').disabled = false;
+        renderPagina({ erro: e.message });
+      }
+    });
+
+    // Botão enviar email após criar
+    document.getElementById('btn-enviar-email-cobr')?.addEventListener('click', e => {
+      navigate('email', e.target.dataset.boleto);
+    });
+
+    applyPrivacy();
+  }
+
+  renderPagina();
+}
+
+// ── Página: Auditoria ─────────────────────────────────────────────────────────
 async function pageAuditoria() {
   setTitle('Auditoria de Segurança'); setActive('auditoria');
   render(`<div class="card"><div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div></div>`);
@@ -1581,6 +1759,7 @@ function route(){
     case'perfil':      return pagePerfil();
     case'automacoes':  return pageAutomacoes();
     case'smtp':            return pageSmtp();
+    case'nova-cobranca':   return pageNovaCobranca();
     case'personalizacao':  return pagePersonalizacao();
     case'auditoria':       return pageAuditoria();
     default:         return pageDashboard();

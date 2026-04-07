@@ -81,6 +81,29 @@ module.exports = {
     } catch { return null; }
   },
 
+  // Cria um novo pagamento no Asaas
+  async criarPagamento({ customer, billingType, value, dueDate, description, apiKey }) {
+    const { data } = await client(apiKey).post('/payments', {
+      customer,
+      billingType,
+      value,
+      dueDate,
+      description: description || undefined,
+    });
+    return data;
+  },
+
+  // Cria um novo cliente no Asaas
+  async criarCliente({ name, cpfCnpj, email, phone, apiKey }) {
+    const { data } = await client(apiKey).post('/customers', {
+      name,
+      cpfCnpj: cpfCnpj || undefined,
+      email:   email   || undefined,
+      phone:   phone   || undefined,
+    });
+    return data;
+  },
+
   // Stats de uma conta (4 queries paralelas)
   async getStats(apiKey) {
     const [pendentes, pagos, vencidos, cancelados] = await Promise.all([
