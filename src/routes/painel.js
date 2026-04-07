@@ -65,6 +65,17 @@ router.get('/boletos/:id', async (req, res) => {
   }
 });
 
+router.get('/boletos/:id/pix', async (req, res) => {
+  try {
+    const { contaId } = req.query;
+    const { apiKey } = resolverConta(contaId);
+    const pix = await asaas.getPixQrCode(req.params.id, apiKey);
+    res.json({ payload: pix?.payload || null, expirationDate: pix?.expirationDate || null });
+  } catch (e) {
+    res.status(e.status || 502).json({ erro: e.message });
+  }
+});
+
 router.get('/boletos/:id/cliente', async (req, res) => {
   try {
     const { contaId } = req.query;

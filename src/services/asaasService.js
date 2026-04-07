@@ -61,6 +61,12 @@ module.exports = {
     return data;
   },
 
+  // Retorna o código PIX copia e cola de uma cobrança
+  async getPixQrCode(id, apiKey) {
+    const { data } = await client(apiKey).get(`/payments/${id}/pixQrCode`);
+    return data; // { encodedImage, payload, expirationDate }
+  },
+
   // Dados do cliente (com cache por conta)
   async getCliente(customerId, apiKey) {
     return getCliente(customerId, apiKey);

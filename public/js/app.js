@@ -46,13 +46,26 @@ function safeUrl(url) {
   try { const u = new URL(url); return u.protocol === 'https:' ? url : null; } catch { return null; }
 }
 
-// Gera link wa.me para abrir WhatsApp Web com mensagem pré-preenchida (sem número — abre seletor de contato)
-function waShareLink(nomeCliente, valor, dueDate, linkBoleto) {
+// Gera link wa.me com mensagem pré-preenchida (sem número — abre seletor de contato)
+// pixCodigo: string do PIX copia e cola (opcional)
+function waShareLink(nomeCliente, valor, dueDate, linkBoleto, billingType, pixCodigo) {
   const nome = nomeCliente || 'Cliente';
   const val  = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor || 0);
   const [y, m, d] = (dueDate || '').split('-');
   const venc = dueDate ? `${d}/${m}/${y}` : '';
-  const msg  = `Olá, ${nome}! 😊\n\nSegue seu boleto referente ao valor de *${val}*${venc ? `, com vencimento em *${venc}*` : ''}.\n\nAcesse pelo link abaixo:\n${linkBoleto}\n\nQualquer dúvida, estamos à disposição!`;
+  const isPix = billingType === 'PIX';
+
+  let msg = `Olá, *${nome}*! 😊\n\n`;
+  msg += `Segue sua cobrança no valor de *${val}*${venc ? `, com vencimento em *${venc}*` : ''}.`;
+
+  if (isPix && pixCodigo) {
+    msg += `\n\n💠 *Pague via PIX — copie o código abaixo:*\n\`${pixCodigo}\``;
+    if (linkBoleto) msg += `\n\n🔗 Ou acesse o link para visualizar: ${linkBoleto}`;
+  } else if (linkBoleto) {
+    msg += `\n\n🔗 Acesse o boleto pelo link abaixo:\n${linkBoleto}`;
+  }
+
+  msg += `\n\nQualquer dúvida, estamos à disposição!`;
   return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }
 
@@ -112,6 +125,9 @@ const api = {
   getConfig:    ()  => apiFetch('/api/config'),
   salvarConfig: (b) => apiFetch('/api/config', { method:'PUT', body: JSON.stringify(b) }),
   deletarLogo:  ()  => apiFetch('/api/config/logo', { method:'DELETE' }),
+
+  // PIX copia e cola
+  pixQrCode: (id, c) => apiFetch(`/api/painel/boletos/${id}/pix?${q({contaId:c})}`),
 };
 
 function q(obj) { return new URLSearchParams(Object.fromEntries(Object.entries(obj).filter(([,v])=>v))); }
@@ -371,7 +387,7 @@ async function pageBoletos() {
       const link=safeUrl(b.bankSlipUrl||b.invoiceUrl);
       const tipo=b.billingType==='PIX'?'PIX':'Boleto';
       const isMes=(b.dueDate||'').startsWith(mesAtual2);
-      const waLink=link?waShareLink(b.customerName,b.value,b.dueDate,link):'';
+      const svgWa=`<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>`;
       return `<tr ${isMes?'style="background:#f0fdf4"':''}>
         <td><span class="prv">${esc(b.customerName||'—')}</span></td>
         <td><strong class="prv">${moeda(b.value)}</strong> <span class="text-muted" style="font-size:11px">${tipo}</span></td>
@@ -380,10 +396,7 @@ async function pageBoletos() {
         <td>${dataFmt(b.paymentDate)}</td>
         <td style="white-space:nowrap">
           ${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">Ver</a>`:''}
-          ${waLink?`<a href="${esc(waLink)}" target="_blank" rel="noopener noreferrer" class="btn btn-wa btn-sm" title="Enviar via WhatsApp Web">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-            WhatsApp
-          </a>`:''}
+          <button class="btn btn-wa btn-sm" data-wa="${esc(b.id)}" data-tipo="${esc(b.billingType)}" title="Enviar via WhatsApp">${svgWa} WhatsApp</button>
           <button class="btn btn-primary btn-sm" data-boleto="${esc(b.id)}">Enviar email</button>
         </td></tr>`;
     }).join('');
@@ -401,6 +414,31 @@ async function pageBoletos() {
     document.querySelectorAll('[data-boleto]').forEach(btn=>btn.addEventListener('click',()=>navigate('email',btn.dataset.boleto)));
     document.getElementById('btn-prev')?.addEventListener('click',()=>{state.boletosOffset=Math.max(0,state.boletosOffset-20);pageBoletos();});
     document.getElementById('btn-next')?.addEventListener('click',()=>{state.boletosOffset+=20;pageBoletos();});
+
+    // Botões WhatsApp — busca PIX se necessário, depois abre wa.me
+    document.querySelectorAll('[data-wa]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id   = btn.dataset.wa;
+        const tipo = btn.dataset.tipo;
+        const cid  = getContaId();
+        // Encontra o boleto nos dados já carregados
+        const b = dados.find(x => x.id === id);
+        if (!b) return;
+        const link = safeUrl(b.bankSlipUrl || b.invoiceUrl);
+        btn.disabled = true; btn.textContent = '...';
+        let pixCodigo = null;
+        if (tipo === 'PIX') {
+          try {
+            const r = await api.pixQrCode(id, cid);
+            pixCodigo = r?.payload || null;
+          } catch { /* segue sem PIX */ }
+        }
+        btn.disabled = false;
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg> WhatsApp`;
+        const url = waShareLink(b.customerName, b.value, b.dueDate, link, tipo, pixCodigo);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      });
+    });
   } catch(e){ if(e.message==='session')return; document.querySelector('.card').innerHTML=`<div class="card-body">${erroCard(e.message)}</div>`; }
 }
 
