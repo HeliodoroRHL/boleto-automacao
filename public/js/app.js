@@ -1249,6 +1249,16 @@ async function pageAutomacoes() {
             </div>
 
             <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+              <div class="card-title" style="margin-bottom:4px">E-mails em cópia (CC)</div>
+              <p class="text-muted" style="font-size:12px;margin:0 0 10px">Esses endereços recebem cópia de <strong>todos</strong> os e-mails enviados por esta automação.</p>
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+                <input class="input" id="f-cc-input" type="email" placeholder="email@exemplo.com" style="max-width:280px">
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-cc-add">+ Adicionar</button>
+              </div>
+              <div id="cc-tags" style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px"></div>
+            </div>
+
+            <div style="grid-column:1/-1;border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
               <div class="card-title" style="margin-bottom:12px">Notificação após execução</div>
               <label class="checkbox-row" style="margin-bottom:8px">
                 <input type="checkbox" id="f-notificar-admin" ${a?.notificarAdmin?'checked':''}>
@@ -1304,6 +1314,31 @@ async function pageAutomacoes() {
     document.getElementById('f-notificar-admin').addEventListener('change', e => {
       document.getElementById('notificacao-section').style.display = e.target.checked ? '' : 'none';
     });
+
+    // ── CC tag-input ──────────────────────────────────────────────────────────
+    const ccEmails = new Set(Array.isArray(a?.emailCC) ? a.emailCC : []);
+    function renderCCTags() {
+      const container = document.getElementById('cc-tags');
+      container.innerHTML = [...ccEmails].map(e =>
+        `<span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:12px">
+          ${esc(e)}
+          <button type="button" data-cc="${esc(e)}" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;line-height:1;padding:0 0 0 2px">&times;</button>
+        </span>`
+      ).join('');
+      container.querySelectorAll('[data-cc]').forEach(btn =>
+        btn.addEventListener('click', () => { ccEmails.delete(btn.dataset.cc); renderCCTags(); })
+      );
+    }
+    renderCCTags();
+    function addCC() {
+      const inp = document.getElementById('f-cc-input');
+      const val = inp.value.trim().toLowerCase();
+      if (!val) return;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) { toast('E-mail inválido','warning'); return; }
+      ccEmails.add(val); inp.value = ''; renderCCTags();
+    }
+    document.getElementById('btn-cc-add').addEventListener('click', addCC);
+    document.getElementById('f-cc-input').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); addCC(); } });
 
     // Estado dos clientes selecionados (Set de IDs)
     const clientesSelecionados = new Set(a?.clientesFiltro || []);
@@ -1380,6 +1415,7 @@ async function pageAutomacoes() {
         assunto:          document.getElementById('f-assunto-auto').value,
         corpo:            document.getElementById('f-corpo-auto').value,
         anexarPdf:        document.getElementById('f-pdf-auto').checked,
+        emailCC:          [...ccEmails],
         notificarAdmin:   notificar,
         emailNotificacao: notificar ? emailNotif : '',
       };

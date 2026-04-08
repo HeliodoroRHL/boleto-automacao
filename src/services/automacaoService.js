@@ -134,7 +134,8 @@ async function executarAutomacao(auto) {
         pdfBuffer = await asaas.downloadPdf(pag.bankSlipUrl).catch(() => null);
       }
 
-      await emailSvc.enviar({ to: emailDest, subject: assunto, body: corpo, pdfBuffer, boletoId: pag.id, clienteNome: nomeCliente, emailFromOverride });
+      const ccList = Array.isArray(auto.emailCC) && auto.emailCC.length ? auto.emailCC.join(', ') : undefined;
+      await emailSvc.enviar({ to: emailDest, cc: ccList, subject: assunto, body: corpo, pdfBuffer, boletoId: pag.id, clienteNome: nomeCliente, emailFromOverride });
       enviados++;
       detalhes.push({ id: pag.id, email: emailDest, cliente: nomeCliente, status: 'enviado' });
       log.ok('Email enviado (automação)', { email: emailDest, id: pag.id });

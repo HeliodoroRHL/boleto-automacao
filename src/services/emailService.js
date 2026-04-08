@@ -142,16 +142,16 @@ function montarRodape(cfg, nomePortal) {
     </table>`;
 }
 
-function montarHtmlEmail(body, nomePortal, logoDataUri, cfg) {
+function montarHtmlEmail(body, nomePortal, logoSrc, cfg) {
   const corpoHtml = body
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/\n/g, '<br>');
 
-  // Logo: height fixo, width automático — compatível com Outlook/Gmail/Apple Mail
-  const logoHtml = logoDataUri
-    ? `<img src="${logoDataUri}" alt="${nomePortal}" height="70" width="auto" border="0"
+  // Logo: CID attachment (cid:logo@boletohub) ou fallback texto — Gmail/Outlook/Apple Mail
+  const logoHtml = logoSrc
+    ? `<img src="${logoSrc}" alt="${nomePortal}" height="70" width="auto" border="0"
          style="height:70px;width:auto;max-width:220px;display:block;margin:0 auto">`
     : `<span style="font-size:22px;font-weight:bold;color:#ffffff;font-family:Arial,sans-serif">${nomePortal}</span>`;
 
@@ -200,23 +200,39 @@ module.exports = {
     const cfg        = cfgDb.get();
     const nomePortal = cfg.nomePortal || 'BoletoHub';
 
-    // Logo como base64 data URI — funciona em todos os clientes (Gmail, Outlook, Apple Mail)
-    let logoDataUri = null;
+    // Logo via CID attachment — único método que funciona em Gmail, Outlook e Apple Mail
+    // data: URI é bloqueado pelo Gmail; URL externa não funciona em redes internas
+    let logoCid  = null;
+    let logoMime = 'image/png';
     const logoPath = cfg.logoPath
       ? path.join(__dirname, '../../public', cfg.logoPath)
       : null;
     if (logoPath && fs.existsSync(logoPath)) {
-      const ext  = path.extname(logoPath).toLowerCase().replace('.', '');
-      const mime = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-      logoDataUri = `data:${mime};base64,${fs.readFileSync(logoPath).toString('base64')}`;
+      const ext = path.extname(logoPath).toLowerCase().replace('.', '');
+      logoMime  = ext === 'svg' ? 'image/svg+xml' : `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+      logoCid   = 'logo@boletohub';
     }
 
-    const attachments = pdfBuffer ? [{
-      filename:           nomePdf(clienteNome, boletoId),
-      content:            pdfBuffer,
-      contentType:        'application/pdf',
-      contentDisposition: 'attachment',
-    }] : [];
+    const attachments = [];
+    if (logoCid) {
+      attachments.push({
+        filename:    path.basename(logoPath),
+        path:        logoPath,
+        cid:         logoCid,
+        contentType: logoMime,
+      });
+    }
+    if (pdfBuffer) {
+      attachments.push({
+        filename:           nomePdf(clienteNome, boletoId),
+        content:            pdfBuffer,
+        contentType:        'application/pdf',
+        contentDisposition: 'attachment',
+      });
+    }
+
+    // logoCid presente → <img src="cid:logo@boletohub">; ausente → texto do portal
+    const logoRef = logoCid ? `cid:${logoCid}` : null;
 
     await transport.sendMail({
       from,
@@ -224,7 +240,7 @@ module.exports = {
       cc:           cc || undefined,
       subject,
       text:         body,
-      html:         montarHtmlEmail(body, nomePortal, logoDataUri, cfg),
+      html:         montarHtmlEmail(body, nomePortal, logoRef, cfg),
       textEncoding: 'base64',
       attachments,
     });

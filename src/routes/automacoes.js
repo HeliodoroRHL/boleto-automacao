@@ -17,14 +17,15 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   const { nome, contaId, ativa, tipoGatilho, diaDoMes, diasAntes, hora,
           tiposPagamento, statusFiltro, clientesFiltro,
-          assunto, corpo, anexarPdf, notificarAdmin, emailNotificacao,
+          assunto, corpo, anexarPdf, emailCC, notificarAdmin, emailNotificacao,
           enviarEmail, enviarWhatsApp, mensagemWhatsApp } = req.body || {};
   if (!nome?.trim()) return res.status(400).json({ erro: 'Informe um nome para a automação' });
   if (!tiposPagamento?.length) return res.status(400).json({ erro: 'Selecione ao menos um tipo de pagamento' });
   const nova = autoDb.create({
     nome: nome.trim(), contaId, ativa, tipoGatilho, diaDoMes, diasAntes, hora,
     tiposPagamento, statusFiltro, clientesFiltro,
-    assunto, corpo, anexarPdf, notificarAdmin, emailNotificacao,
+    assunto, corpo, anexarPdf, emailCC: Array.isArray(emailCC) ? emailCC : [],
+    notificarAdmin, emailNotificacao,
     enviarEmail, enviarWhatsApp, mensagemWhatsApp,
   });
   log.ok('Automação criada', { nome: nova.nome });
@@ -35,14 +36,15 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   const { nome, contaId, ativa, tipoGatilho, diaDoMes, diasAntes, hora,
           tiposPagamento, statusFiltro, clientesFiltro,
-          assunto, corpo, anexarPdf, notificarAdmin, emailNotificacao,
+          assunto, corpo, anexarPdf, emailCC, notificarAdmin, emailNotificacao,
           enviarEmail, enviarWhatsApp, mensagemWhatsApp } = req.body || {};
   if (nome !== undefined && !nome?.trim()) return res.status(400).json({ erro: 'Nome não pode ser vazio' });
   if (tiposPagamento !== undefined && !tiposPagamento?.length) return res.status(400).json({ erro: 'Selecione ao menos um tipo de pagamento' });
   const atualizada = autoDb.update(req.params.id, {
     nome: nome?.trim(), contaId, ativa, tipoGatilho, diaDoMes, diasAntes, hora,
     tiposPagamento, statusFiltro, clientesFiltro,
-    assunto, corpo, anexarPdf, notificarAdmin, emailNotificacao,
+    assunto, corpo, anexarPdf, emailCC: Array.isArray(emailCC) ? emailCC : [],
+    notificarAdmin, emailNotificacao,
     enviarEmail, enviarWhatsApp, mensagemWhatsApp,
   });
   atualizada ? res.json(atualizada) : res.status(404).json({ erro: 'Não encontrada' });
