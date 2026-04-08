@@ -22,8 +22,17 @@ const upload = multer({
   storage,
   limits: { fileSize: 2 * 1024 * 1024 }, // 2 MB
   fileFilter(req, file, cb) {
-    if (/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.mimetype)) cb(null, true);
-    else cb(new Error('Apenas imagens PNG, JPG, WEBP ou SVG são aceitas'));
+    // Valida mimetype
+    if (!/^image\/(png|jpeg|webp|svg\+xml)$/.test(file.mimetype)) {
+      return cb(new Error('Apenas imagens PNG, JPG, WEBP ou SVG são aceitas'));
+    }
+    // Valida extensão (whitelist — evita bypass via mimetype spoofing)
+    const ext = path.extname(file.originalname).toLowerCase().slice(1);
+    const ALLOWED = ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+    if (!ALLOWED.includes(ext)) {
+      return cb(new Error('Tipo de arquivo não permitido. Use PNG, JPG, WEBP ou SVG.'));
+    }
+    cb(null, true);
   },
 });
 

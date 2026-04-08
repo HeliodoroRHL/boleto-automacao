@@ -11,15 +11,16 @@ function client(apiKey) {
   });
 }
 
-// Cache de clientes por conta (evita recriação)
-const _clienteCache = new Map();
+// Cache de clientes por conta (evita recriação) — com TTL de 1 hora
+const _clienteCache = new Map(); // { data, ts }
 
 async function getCliente(customerId, apiKey) {
   const cacheKey = `${apiKey || 'default'}:${customerId}`;
-  if (_clienteCache.has(cacheKey)) return _clienteCache.get(cacheKey);
+  const cached = _clienteCache.get(cacheKey);
+  if (cached && (Date.now() - cached.ts) < 3600000) return cached.data;
   try {
     const { data } = await client(apiKey).get(`/customers/${customerId}`);
-    _clienteCache.set(cacheKey, data);
+    _clienteCache.set(cacheKey, { data, ts: Date.now() });
     return data;
   } catch { return null; }
 }

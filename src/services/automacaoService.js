@@ -156,7 +156,8 @@ async function executarAutomacao(auto) {
   log.ok('Automação concluída', { nome: auto.nome, enviados, erros });
 
   // Notificação ao admin
-  if (auto.notificarAdmin && auto.emailNotificacao) {
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (auto.notificarAdmin && auto.emailNotificacao && EMAIL_RE.test(auto.emailNotificacao)) {
     try {
       const assunto = `[BoletoHub] Automação "${auto.nome}" — ${enviados} enviado(s)`;
       const corpo   = [

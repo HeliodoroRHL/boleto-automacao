@@ -8,6 +8,15 @@ const auditoriaDb  = require('../db/auditoria');
 const log          = require('../middleware/logger');
 const requireAuth  = require('../middleware/authMiddleware');
 
+// Rate limit para alteração de perfil/senha: max 10 tentativas por IP a cada 15 min
+const perfilLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { erro: 'Muitas tentativas. Aguarde 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Brute-force protection: max 10 tentativas por IP a cada 15 min
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -73,7 +82,7 @@ router.get('/me', requireAuth, (req, res) => {
 });
 
 // PUT /auth/perfil — altera email, nome e/ou senha
-router.put('/perfil', requireAuth, async (req, res) => {
+router.put('/perfil', perfilLimiter, requireAuth, async (req, res) => {
   const { nome, email, senhaAtual, novaSenha } = req.body || {};
 
   const user = users.findByEmail(req.user.sub);

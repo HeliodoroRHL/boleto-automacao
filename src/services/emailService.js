@@ -13,7 +13,7 @@ function criarTransporte() {
       port:   cfg.port || 587,
       secure: cfg.secure || false,
       auth:   { user: cfg.user, pass: cfg.password },
-      tls:    { rejectUnauthorized: false },
+      tls:    { rejectUnauthorized: process.env.NODE_ENV === 'production' },
     });
   }
   return nodemailer.createTransport({
@@ -21,7 +21,7 @@ function criarTransporte() {
     port:   parseInt(process.env.EMAIL_PORT || '587'),
     secure: process.env.EMAIL_SECURE === 'true',
     auth:   { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASSWORD },
-    tls:    { rejectUnauthorized: false },
+    tls:    { rejectUnauthorized: process.env.NODE_ENV === 'production' },
   });
 }
 

@@ -55,6 +55,9 @@ module.exports = {
     const db = load();
     if (!db.historico_emails) db.historico_emails = [];
     db.historico_emails.unshift({ id: `EML-${Date.now()}`, enviadoEm: new Date().toISOString(), ...entry });
+    // Remove emails com mais de 90 dias
+    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    db.historico_emails = db.historico_emails.filter(e => e.enviadoEm > cutoff);
     // Manter apenas os últimos 500
     if (db.historico_emails.length > 500) db.historico_emails = db.historico_emails.slice(0, 500);
     save(db);

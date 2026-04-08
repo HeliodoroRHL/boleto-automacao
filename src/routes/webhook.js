@@ -1,8 +1,17 @@
-const express = require('express');
-const crypto  = require('crypto');
-const router  = express.Router();
+const express   = require('express');
+const crypto    = require('crypto');
+const rateLimit = require('express-rate-limit');
+const router    = express.Router();
 const db  = require('../db/database');
 const log = require('../middleware/logger');
+
+// Rate limit: máx 100 requisições por minuto por IP
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Validação do token Asaas — comparação timing-safe (evita timing attacks)
 function validateToken(req, res, next) {
@@ -56,7 +65,7 @@ const handlers = {
 };
 
 // POST /boletos/webhook/asaas
-router.post('/', validateToken, (req, res) => {
+router.post('/', webhookLimiter, validateToken, (req, res) => {
   const payload = req.body;
   const evento = payload.event;
 

@@ -31,15 +31,20 @@ app.set('trust proxy', 1);
 
 // ── Segurança: cabeçalhos HTTP ────────────────────────────────────────────────
 app.use(helmet({
+  hsts: { maxAge: 31536000, includeSubDomains: true },
+  frameguard: { action: 'deny' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'"],
-      scriptSrcAttr:  ["'unsafe-inline'"],   // permite onclick nos elementos do SPA
+      scriptSrc:      ["'self'", "'unsafe-inline'"],  // unsafe-inline necessário (SPA sem bundler)
+      scriptSrcAttr:  ["'unsafe-inline'"],             // permite onclick nos elementos do SPA
       styleSrc:       ["'self'", "'unsafe-inline'"],
-      imgSrc:         ["'self'", 'data:'],
+      imgSrc:         ["'self'", 'data:', 'blob:'],
       connectSrc:     ["'self'"],
-      frameAncestors: ["'none'"],
+      fontSrc:        ["'self'"],
+      objectSrc:      ["'none'"],
+      frameSrc:       ["'none'"],
+      upgradeInsecureRequests: [],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -101,6 +106,7 @@ cron.schedule('* * * * *', async () => {
 });
 
 // ── Cron: marca boletos locais como vencidos (09h) ────────────────────────────
+// ATENÇÃO: o servidor deve estar com timezone America/Sao_Paulo (TZ=America/Sao_Paulo no .env ou systemd)
 cron.schedule('0 9 * * *', () => {
   const hoje = new Date().toISOString().split('T')[0];
   const boletos = db.getBoletos();

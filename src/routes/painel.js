@@ -16,11 +16,20 @@ const emailLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Rate limit: criação de cobranças/assinaturas/links — máx 20 por minuto por IP
+const criacaoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { erro: 'Muitas requisições. Aguarde 1 minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Resolve a API key de uma conta pelo ID (ou usa padrão do .env)
 function resolverConta(contaId) {
   if (!contaId) return { apiKey: undefined, emailFromOverride: undefined, nomeConta: 'Padrão' };
   const conta = contasDb.get(contaId);
-  if (!conta) throw Object.assign(new Error('Conta não encontrada'), { status: 404 });
+  if (!conta) throw Object.assign(new Error('Recurso não encontrado'), { status: 404 });
   let emailFromOverride;
   if (conta.emailFrom) {
     emailFromOverride = conta.emailNome ? `${conta.emailNome} <${conta.emailFrom}>` : conta.emailFrom;
@@ -33,8 +42,13 @@ function resolverConta(contaId) {
 router.get('/boletos', async (req, res) => {
   try {
     const { contaId, status, offset, limit, dueDateGe, dueDateLe } = req.query;
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const VALID_STATUS = ['PENDING', 'RECEIVED', 'OVERDUE', 'CANCELLED', 'REFUNDED'];
+    const statusSafe    = VALID_STATUS.includes(status) ? status : undefined;
+    const dueDateGeSafe = DATE_RE.test(dueDateGe) ? dueDateGe : undefined;
+    const dueDateLeSafe = DATE_RE.test(dueDateLe) ? dueDateLe : undefined;
     const { apiKey } = resolverConta(contaId);
-    const data = await asaas.listarBoletos({ status, offset: +offset || 0, limit: +limit || 50, dueDateGe, dueDateLe, apiKey });
+    const data = await asaas.listarBoletos({ status: statusSafe, offset: +offset || 0, limit: +limit || 50, dueDateGe: dueDateGeSafe, dueDateLe: dueDateLeSafe, apiKey });
 
     // Garante que customerName seja preenchido — às vezes o Asaas retorna nulo
     if (data.data) {
@@ -126,7 +140,7 @@ router.get('/clientes', async (req, res) => {
 // ── Cobranças (criar) ─────────────────────────────────────────────────────────
 
 // POST /api/painel/cobrancas — cria uma nova cobrança no Asaas
-router.post('/cobrancas', async (req, res) => {
+router.post('/cobrancas', criacaoLimiter, async (req, res) => {
   try {
     const { contaId, customer, customerName, customerCpfCnpj, customerEmail,
             billingType, value, dueDate, description } = req.body || {};
@@ -168,7 +182,7 @@ router.post('/cobrancas', async (req, res) => {
 });
 
 // POST /api/painel/assinaturas — cria cobrança recorrente no Asaas
-router.post('/assinaturas', async (req, res) => {
+router.post('/assinaturas', criacaoLimiter, async (req, res) => {
   try {
     const { contaId, customer, customerName, customerCpfCnpj, customerEmail,
             billingType, value, nextDueDate, cycle, description, endDate, maxPayments } = req.body || {};
@@ -299,7 +313,7 @@ router.get('/links-pagamento', async (req, res) => {
   }
 });
 
-router.post('/links-pagamento', async (req, res) => {
+router.post('/links-pagamento', criacaoLimiter, async (req, res) => {
   try {
     const { contaId, name, billingType, chargeType, value, description, endDate, maxInstallmentCount, subscriptionCycle } = req.body || {};
     if (!name || !billingType || !chargeType || !value) {

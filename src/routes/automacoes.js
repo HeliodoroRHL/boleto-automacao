@@ -1,8 +1,9 @@
-const express  = require('express');
-const router   = express.Router();
-const autoDb   = require('../db/automacoes');
-const autoSvc  = require('../services/automacaoService');
-const log      = require('../middleware/logger');
+const express      = require('express');
+const router       = express.Router();
+const autoDb       = require('../db/automacoes');
+const autoSvc      = require('../services/automacaoService');
+const auditoriaDb  = require('../db/auditoria');
+const log          = require('../middleware/logger');
 
 // GET /api/automacoes
 router.get('/', (req, res) => res.json(autoDb.list()));
@@ -78,7 +79,10 @@ router.post('/:id/simular', async (req, res) => {
 
 // DELETE /api/automacoes/:id
 router.delete('/:id', (req, res) => {
-  autoDb.delete(req.params.id) ? res.json({ ok: true }) : res.status(404).json({ erro: 'Não encontrada' });
+  const deleted = autoDb.delete(req.params.id);
+  if (!deleted) return res.status(404).json({ erro: 'Não encontrada' });
+  auditoriaDb.registrar({ tipo: 'automacao_deletada', usuario: req.user?.email || req.user?.sub || 'sistema', detalhe: `Automação deletada: ${req.params.id}` });
+  res.json({ ok: true });
 });
 
 module.exports = router;
