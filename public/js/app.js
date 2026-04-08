@@ -170,6 +170,65 @@ function abrirModalWa(b, link, tipo, pixCodigo) {
   }
 }
 
+function abrirModalEditarCobranca(b, contaId, onSucesso) {
+  document.getElementById('modal-editar-cobr')?.remove();
+  const modal = document.createElement('div');
+  modal.id = 'modal-editar-cobr';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width:440px">
+      <div class="modal-header">
+        <strong>Editar cobrança</strong>
+        <button class="btn btn-ghost btn-sm" id="btn-editar-cobr-fechar">✕</button>
+      </div>
+      <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+        <div class="text-muted" style="font-size:13px">
+          <strong>${esc(b.customerName||'—')}</strong> &nbsp;·&nbsp; ${b.billingType==='PIX'?'PIX':'Boleto'}
+        </div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input class="input" id="ec-valor" type="number" step="0.01" min="0.01" value="${b.value||''}">
+        </div>
+        <div class="field">
+          <label>Vencimento</label>
+          <input class="input" id="ec-venc" type="date" value="${b.dueDate||''}">
+        </div>
+        <div class="field">
+          <label>Descrição</label>
+          <input class="input" id="ec-descricao" value="${esc(b.description||'')}">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+          <button class="btn btn-secondary" id="btn-editar-cobr-cancelar">Cancelar</button>
+          <button class="btn btn-primary" id="btn-editar-cobr-salvar">Salvar alterações</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  const fechar = () => modal.remove();
+  document.getElementById('btn-editar-cobr-fechar').addEventListener('click', fechar);
+  document.getElementById('btn-editar-cobr-cancelar').addEventListener('click', fechar);
+  modal.addEventListener('click', e => { if (e.target === modal) fechar(); });
+
+  document.getElementById('btn-editar-cobr-salvar').addEventListener('click', async () => {
+    const valor = parseFloat(document.getElementById('ec-valor').value);
+    const venc  = document.getElementById('ec-venc').value;
+    const desc  = document.getElementById('ec-descricao').value.trim();
+    if (!valor || !venc) return toast('Preencha valor e vencimento', 'warning');
+    const btn = document.getElementById('btn-editar-cobr-salvar');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+      await api.atualizarCobranca(b.id, { value: valor, dueDate: venc, description: desc || undefined }, contaId);
+      toast('Cobrança atualizada!', 'success');
+      fechar();
+      if (onSucesso) onSucesso();
+    } catch(e) {
+      toast('Erro: ' + e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Salvar alterações';
+    }
+  });
+}
+
 // ── API ───────────────────────────────────────────────────────────────────────
 
 // ── API ───────────────────────────────────────────────────────────────────────
@@ -230,11 +289,25 @@ const api = {
   deletarLogo:  ()  => apiFetch('/api/config/logo', { method:'DELETE' }),
 
   // Cobranças
-  criarCobranca:    (b) => apiFetch('/api/painel/cobrancas',    { method:'POST', body: JSON.stringify(b) }),
-  criarAssinatura:  (b) => apiFetch('/api/painel/assinaturas',  { method:'POST', body: JSON.stringify(b) }),
+  criarCobranca:      (b) => apiFetch('/api/painel/cobrancas',    { method:'POST', body: JSON.stringify(b) }),
+  criarAssinatura:    (b) => apiFetch('/api/painel/assinaturas',  { method:'POST', body: JSON.stringify(b) }),
+  atualizarCobranca:  (id, b, c) => apiFetch(`/api/painel/boletos/${id}?${q({contaId:c})}`, { method:'PUT', body: JSON.stringify(b) }),
 
   // PIX copia e cola
   pixQrCode: (id, c) => apiFetch(`/api/painel/boletos/${id}/pix?${q({contaId:c})}`),
+
+  // Saldo e estatísticas
+  saldo:              (c) => apiFetch(`/api/painel/saldo?${q({contaId:c})}`),
+
+  // Notas Fiscais
+  notasFiscais:       (p) => apiFetch(`/api/painel/notas-fiscais?${q(p)}`),
+
+  // Links de Pagamento
+  linksPagamento:     (p) => apiFetch(`/api/painel/links-pagamento?${q(p)}`),
+  criarLinkPagamento: (b) => apiFetch('/api/painel/links-pagamento', { method:'POST', body: JSON.stringify(b) }),
+
+  // Parcelamentos
+  parcelamentos:      (p) => apiFetch(`/api/painel/parcelamentos?${q(p)}`),
 };
 
 function q(obj) { return new URLSearchParams(Object.fromEntries(Object.entries(obj).filter(([,v])=>v))); }
@@ -392,7 +465,7 @@ async function pageDashboard() {
   bindContaBar();
   try {
     const cid=getContaId();
-    const [stats, lista, emailRes] = await Promise.all([
+    const [stats, lista, emailRes, saldoRes] = await Promise.all([
       api.stats(cid),
       api.boletos((() => {
         const h=new Date(), y=h.getFullYear(), m=String(h.getMonth()+1).padStart(2,'0');
@@ -400,6 +473,7 @@ async function pageDashboard() {
         return {limit:10,offset:0,dueDateGe:`${y}-${m}-01`,dueDateLe:fim,...(cid?{contaId:cid}:{})};
       })()),
       api.emailResumo().catch(()=>null),
+      api.saldo(cid).catch(()=>null),
     ]);
     const bCards=[
       {color:'blue',  icon:svgDoc(),   value:stats.total,     label:'Total boletos'},
@@ -407,6 +481,10 @@ async function pageDashboard() {
       {color:'green', icon:svgCheck(), value:stats.pagos,     label:'Pagos'},
       {color:'red',   icon:svgAlert(), value:stats.vencidos,  label:'Vencidos'},
     ];
+    const saldoCards = saldoRes ? [
+      {color:'green',  icon:svgCheck(), value:`<span class="prv">${moeda(saldoRes.balance)}</span>`,   label:'Saldo disponível'},
+      {color:'blue',   icon:svgDoc(),   value:`<span class="prv">${moeda(saldoRes.value)}</span>`,     label:`Total recebido (${saldoRes.quantity||0} cobranças)`},
+    ] : [];
     const eCards = emailRes ? [
       {color:'blue',   icon:svgSend(), value:emailRes.totalHoje,   label:'E-mails hoje'},
       {color:'green',  icon:svgSend(), value:emailRes.totalSemana, label:'Últimos 7 dias'},
@@ -434,6 +512,7 @@ async function pageDashboard() {
       </tr>`).join('');
     document.getElementById('content').innerHTML = contaBar() + `
       <div class="stats-grid">${bCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value prv">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>
+      ${saldoCards.length?`<div class="stats-grid email-stats-grid">${saldoCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>`:''}
       ${eCards.length?`<div class="stats-grid email-stats-grid">${eCards.map(c=>`<div class="stat-card"><div class="stat-icon ${c.color}">${c.icon}</div><div class="stat-info"><div class="value prv">${c.value}</div><div class="label">${c.label}</div></div></div>`).join('')}</div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
         <div class="card">
@@ -507,6 +586,7 @@ async function pageBoletos() {
         <td>${dataFmt(b.paymentDate)}</td>
         <td style="white-space:nowrap">
           ${link?`<a href="${esc(link)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">Ver</a>`:''}
+          ${(b.status==='PENDING'||b.status==='OVERDUE')?`<button class="btn btn-secondary btn-sm" data-editar="${esc(b.id)}">Editar</button>`:''}
           <button class="btn btn-wa btn-sm" data-wa="${esc(b.id)}" data-tipo="${esc(b.billingType)}" title="Enviar via WhatsApp">${svgWa} WhatsApp</button>
           <button class="btn btn-primary btn-sm" data-boleto="${esc(b.id)}">Enviar email</button>
         </td></tr>`;
@@ -523,6 +603,10 @@ async function pageBoletos() {
         <button class="btn btn-secondary btn-sm" id="btn-next" ${!lista.hasMore?'disabled':''}>Próxima</button></div>`:''}`;
     applyPrivacy();
     document.querySelectorAll('[data-boleto]').forEach(btn=>btn.addEventListener('click',()=>navigate('email',btn.dataset.boleto)));
+    document.querySelectorAll('[data-editar]').forEach(btn=>btn.addEventListener('click',()=>{
+      const b = dados.find(x=>x.id===btn.dataset.editar);
+      if (b) abrirModalEditarCobranca(b, getContaId(), pageBoletos);
+    }));
     document.getElementById('btn-prev')?.addEventListener('click',()=>{state.boletosOffset=Math.max(0,state.boletosOffset-20);pageBoletos();});
     document.getElementById('btn-next')?.addEventListener('click',()=>{state.boletosOffset+=20;pageBoletos();});
 
@@ -1806,12 +1890,38 @@ async function pageNovaCobranca() {
       renderPagina();
     });
 
+    // Auto-preenche campos quando cliente é selecionado no dropdown
+    function bindClienteSel() {
+      const sel = document.getElementById('cobr-cliente-sel');
+      if (!sel) return;
+      sel.addEventListener('change', () => {
+        const cli = clientes.find(c => c.id === sel.value);
+        const nomeEl   = document.getElementById('cobr-nome');
+        const cpfEl    = document.getElementById('cobr-cpfcnpj');
+        const emailEl  = document.getElementById('cobr-email');
+        if (cli) {
+          nomeEl.value  = cli.name    || '';
+          cpfEl.value   = cli.cpfCnpj || '';
+          emailEl.value = cli.email   || '';
+          nomeEl.disabled  = true;
+          cpfEl.disabled   = true;
+          emailEl.disabled = true;
+        } else {
+          nomeEl.value  = ''; cpfEl.value  = ''; emailEl.value = '';
+          nomeEl.disabled  = false;
+          cpfEl.disabled   = false;
+          emailEl.disabled = false;
+        }
+      });
+    }
+    bindClienteSel();
+
     function lerClienteFields() {
       return {
-        sel:      document.getElementById('cobr-cliente-sel')?.value || document.getElementById('cobr-cliente-sel')?.value,
-        nome:     document.getElementById('cobr-nome')?.value.trim()    || '',
-        cpfcnpj:  document.getElementById('cobr-cpfcnpj')?.value.trim() || '',
-        emailCobr:document.getElementById('cobr-email')?.value.trim()   || '',
+        sel:       document.getElementById('cobr-cliente-sel')?.value || '',
+        nome:      document.getElementById('cobr-nome')?.value.trim()    || '',
+        cpfcnpj:   document.getElementById('cobr-cpfcnpj')?.value.trim() || '',
+        emailCobr: document.getElementById('cobr-email')?.value.trim()   || '',
       };
     }
 
@@ -1895,6 +2005,340 @@ async function pageNovaCobranca() {
   renderPagina();
 }
 
+// ── Página: Notas Fiscais ─────────────────────────────────────────────────────
+async function pageNotasFiscais() {
+  setTitle('Notas Fiscais'); setActive('notas-fiscais');
+  let nfOffset = 0;
+  let nfStatus = '';
+
+  const badgeNf = s => {
+    const m = {
+      SUCCESS:   {label:'Emitida',   cls:'badge-received'},
+      ERROR:     {label:'Erro',      cls:'badge-overdue'},
+      PENDING:   {label:'Pendente',  cls:'badge-pending'},
+      CANCELLED: {label:'Cancelada', cls:'badge-cancelled'},
+    }[s] || {label:esc(s), cls:'badge-cancelled'};
+    return `<span class="badge ${m.cls}">${m.label}</span>`;
+  };
+
+  async function carregarNfs() {
+    const cid = getContaId();
+    const params = { offset: nfOffset, limit: 20, contaId: cid || undefined };
+    if (nfStatus) params.status = nfStatus;
+    try {
+      const data = await api.notasFiscais(params);
+      const rows = (data.data || []).map(nf => {
+        const pdfBtn  = nf.pdfUrl  ? `<a href="${esc(nf.pdfUrl)}"  target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">PDF</a>`  : '';
+        const xmlBtn  = nf.xmlUrl  ? `<a href="${esc(nf.xmlUrl)}"  target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">XML</a>`  : '';
+        const pagLink = nf.payment ? `<button class="btn btn-ghost btn-sm" data-nf-boleto="${esc(nf.payment)}">Ver cobrança</button>` : '—';
+        return `<tr>
+          <td><span class="prv">${esc(nf.customerName || '—')}</span></td>
+          <td class="prv" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(nf.description || '—')}</td>
+          <td><strong class="prv">${moeda(nf.value)}</strong></td>
+          <td>${dataFmt(nf.createdAt || nf.effectiveDate)}</td>
+          <td>${badgeNf(nf.status)}</td>
+          <td>${pagLink}</td>
+          <td style="white-space:nowrap">${pdfBtn}${xmlBtn}</td>
+        </tr>`;
+      }).join('');
+      const total = data.totalCount || 0;
+      const pg = Math.floor(nfOffset / 20) + 1;
+      const tp = Math.ceil(total / 20);
+      document.querySelector('#nf-content .card').innerHTML = `
+        <div class="card-header"><span class="card-title">${total} nota(s) fiscal(is)</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Cliente</th><th>Descrição</th><th>Valor</th><th>Data</th><th>Status</th><th>Pagamento</th><th>Ações</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7"><div class="empty-state"><p>Nenhuma nota fiscal encontrada</p></div></td></tr>`}</tbody>
+        </table></div>
+        ${tp>1?`<div class="pagination"><span>Página ${pg} de ${tp}</span>
+          <button class="btn btn-secondary btn-sm" id="nf-prev" ${nfOffset===0?'disabled':''}>Anterior</button>
+          <button class="btn btn-secondary btn-sm" id="nf-next" ${!data.hasMore?'disabled':''}>Próxima</button></div>`:''}`;
+      applyPrivacy();
+      document.getElementById('nf-prev')?.addEventListener('click', () => { nfOffset = Math.max(0, nfOffset-20); carregarNfs(); });
+      document.getElementById('nf-next')?.addEventListener('click', () => { nfOffset += 20; carregarNfs(); });
+      document.querySelectorAll('[data-nf-boleto]').forEach(btn => btn.addEventListener('click', () => navigate('email', btn.dataset.nfBoleto)));
+    } catch(e) {
+      if(e.message==='session')return;
+      document.querySelector('#nf-content .card').innerHTML = `<div class="card-body">${erroCard(e.message)}</div>`;
+    }
+  }
+
+  render(`
+    <div id="nf-content">
+      ${contaBar()}
+      <div class="filters">
+        <select class="select" id="nf-status-sel" style="width:160px">
+          <option value="">Todos os status</option>
+          <option value="PENDING">Pendente</option>
+          <option value="SUCCESS">Emitida</option>
+          <option value="ERROR">Erro</option>
+          <option value="CANCELLED">Cancelada</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="nf-filtrar">Filtrar</button>
+        <button class="btn btn-secondary btn-sm" id="nf-refresh">${svgRefresh()} Atualizar</button>
+      </div>
+      <div class="card"><div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div></div>
+    </div>`);
+  bindContaBar();
+  document.getElementById('nf-filtrar').addEventListener('click', () => { nfStatus = document.getElementById('nf-status-sel').value; nfOffset = 0; carregarNfs(); });
+  document.getElementById('nf-refresh').addEventListener('click', carregarNfs);
+  await carregarNfs();
+}
+
+// ── Página: Links de Pagamento ────────────────────────────────────────────────
+async function pageLinksPagemento() {
+  setTitle('Links de Pagamento'); setActive('links-pagamento');
+  let abaAtiva = 'listagem';
+  let lpOffset = 0;
+
+  const chargeTypeLabel = t => ({DETACHED:'Avulso', INSTALLMENT:'Parcelado', RECURRENT:'Recorrente'}[t] || esc(t));
+
+  async function carregarLinks() {
+    const cid = getContaId();
+    try {
+      const data = await api.linksPagamento({ offset: lpOffset, limit: 20, contaId: cid || undefined });
+      const rows = (data.data || []).map(lk => {
+        const url = safeUrl(lk.url);
+        const copiar = url ? `<button class="btn btn-secondary btn-sm" data-copy-url="${esc(lk.url)}">Copiar link</button>` : '';
+        const abrir  = url ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-ghost btn-sm">Abrir</a>` : '';
+        const ativo  = lk.active ? '<span class="badge badge-received">Ativo</span>' : '<span class="badge badge-cancelled">Inativo</span>';
+        return `<tr>
+          <td><strong class="prv">${esc(lk.name || '—')}</strong></td>
+          <td><span class="prv">${lk.value ? moeda(lk.value) : '—'}</span></td>
+          <td>${chargeTypeLabel(lk.chargeType)}</td>
+          <td>${esc(lk.billingType || '—')}</td>
+          <td>${ativo}</td>
+          <td>${lk.endDate ? dataFmt(lk.endDate) : '—'}</td>
+          <td style="white-space:nowrap">${copiar}${abrir}</td>
+        </tr>`;
+      }).join('');
+      const total = data.totalCount || 0;
+      const pg = Math.floor(lpOffset / 20) + 1;
+      const tp = Math.ceil(total / 20);
+      document.getElementById('lp-lista-content').innerHTML = `
+        <div class="card-header"><span class="card-title">${total} link(s) de pagamento</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Nome</th><th>Valor</th><th>Tipo</th><th>Forma</th><th>Status</th><th>Expira</th><th>Ações</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7"><div class="empty-state"><p>Nenhum link de pagamento encontrado</p></div></td></tr>`}</tbody>
+        </table></div>
+        ${tp>1?`<div class="pagination"><span>Página ${pg} de ${tp}</span>
+          <button class="btn btn-secondary btn-sm" id="lp-prev" ${lpOffset===0?'disabled':''}>Anterior</button>
+          <button class="btn btn-secondary btn-sm" id="lp-next" ${!data.hasMore?'disabled':''}>Próxima</button></div>`:''}`;
+      applyPrivacy();
+      document.getElementById('lp-prev')?.addEventListener('click', () => { lpOffset = Math.max(0,lpOffset-20); carregarLinks(); });
+      document.getElementById('lp-next')?.addEventListener('click', () => { lpOffset += 20; carregarLinks(); });
+      document.querySelectorAll('[data-copy-url]').forEach(btn => btn.addEventListener('click', () => {
+        navigator.clipboard.writeText(btn.dataset.copyUrl).then(() => {
+          const orig = btn.textContent; btn.textContent = 'Copiado!';
+          setTimeout(() => { btn.textContent = orig; }, 2000);
+        }).catch(() => toast('Erro ao copiar', 'error'));
+      }));
+    } catch(e) {
+      if(e.message==='session')return;
+      document.getElementById('lp-lista-content').innerHTML = erroCard(e.message);
+    }
+  }
+
+  function renderPagina() {
+    render(`
+      <div id="lp-content">
+        ${contaBar()}
+        <div style="display:flex;gap:8px;margin-bottom:16px">
+          <button class="tab-btn ${abaAtiva==='listagem'?'active':''}" id="lp-tab-lista">Listagem</button>
+          <button class="tab-btn ${abaAtiva==='novo'?'active':''}" id="lp-tab-novo">Novo link</button>
+        </div>
+        <div id="lp-lista-wrap" style="${abaAtiva==='listagem'?'':'display:none'}">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="btn btn-secondary btn-sm" id="lp-refresh">${svgRefresh()} Atualizar</button>
+          </div>
+          <div class="card" id="lp-lista-content">
+            <div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div>
+          </div>
+        </div>
+        <div id="lp-novo-wrap" style="${abaAtiva==='novo'?'':'display:none'}">
+          <div class="card" style="max-width:560px">
+            <div class="card-header"><span class="card-title">Novo link de pagamento</span></div>
+            <div class="card-body">
+              <div class="form-grid">
+                <div class="field" style="grid-column:1/-1">
+                  <label>Nome *</label>
+                  <input class="input" id="lp-name" placeholder="Ex: Consultoria Mensal">
+                </div>
+                <div class="field">
+                  <label>Forma de pagamento *</label>
+                  <select class="input" id="lp-billingType">
+                    <option value="UNDEFINED">Boleto + PIX (cliente escolhe)</option>
+                    <option value="BOLETO">Boleto bancário</option>
+                    <option value="PIX">PIX</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Tipo de cobrança *</label>
+                  <select class="input" id="lp-chargeType">
+                    <option value="DETACHED">Avulso</option>
+                    <option value="INSTALLMENT">Parcelado</option>
+                    <option value="RECURRENT">Recorrente</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Valor (R$) *</label>
+                  <input class="input" id="lp-value" type="number" step="0.01" min="0.01" placeholder="0,00">
+                </div>
+                <div class="field">
+                  <label>Data de expiração <span class="text-muted">(opcional)</span></label>
+                  <input class="input" id="lp-endDate" type="date">
+                </div>
+                <div class="field" id="lp-field-maxInstallment" style="display:none">
+                  <label>Máx. parcelas</label>
+                  <input class="input" id="lp-maxInstallmentCount" type="number" min="2" max="12" value="12" style="width:100px">
+                </div>
+                <div class="field" id="lp-field-cycle" style="display:none">
+                  <label>Ciclo de recorrência</label>
+                  <select class="input" id="lp-subscriptionCycle">
+                    <option value="WEEKLY">Semanal</option>
+                    <option value="MONTHLY" selected>Mensal</option>
+                    <option value="QUARTERLY">Trimestral</option>
+                    <option value="SEMIANNUALLY">Semestral</option>
+                    <option value="YEARLY">Anual</option>
+                  </select>
+                </div>
+                <div class="field" style="grid-column:1/-1">
+                  <label>Descrição <span class="text-muted">(opcional)</span></label>
+                  <input class="input" id="lp-description" placeholder="Ex: Plano básico de suporte">
+                </div>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:16px">
+                <button class="btn btn-primary" id="btn-criar-link">Criar link</button>
+              </div>
+              <div id="lp-resultado" style="margin-top:12px"></div>
+            </div>
+          </div>
+        </div>
+      </div>`);
+    bindContaBar();
+
+    document.getElementById('lp-tab-lista').addEventListener('click', () => { abaAtiva='listagem'; renderPagina(); });
+    document.getElementById('lp-tab-novo').addEventListener('click',  () => { abaAtiva='novo'; renderPagina(); });
+    document.getElementById('lp-refresh')?.addEventListener('click', carregarLinks);
+
+    // Mostrar/ocultar campos conforme chargeType
+    document.getElementById('lp-chargeType')?.addEventListener('change', e => {
+      document.getElementById('lp-field-maxInstallment').style.display = e.target.value==='INSTALLMENT' ? '' : 'none';
+      document.getElementById('lp-field-cycle').style.display          = e.target.value==='RECURRENT'   ? '' : 'none';
+    });
+
+    document.getElementById('btn-criar-link')?.addEventListener('click', async () => {
+      const name        = document.getElementById('lp-name').value.trim();
+      const billingType = document.getElementById('lp-billingType').value;
+      const chargeType  = document.getElementById('lp-chargeType').value;
+      const value       = parseFloat(document.getElementById('lp-value').value);
+      const description = document.getElementById('lp-description').value.trim();
+      const endDate     = document.getElementById('lp-endDate').value;
+      const maxInstallmentCount = chargeType==='INSTALLMENT' ? parseInt(document.getElementById('lp-maxInstallmentCount').value)||undefined : undefined;
+      const subscriptionCycle   = chargeType==='RECURRENT'   ? document.getElementById('lp-subscriptionCycle').value : undefined;
+      const cid = getContaId();
+
+      if (!name)  return toast('Informe o nome do link', 'warning');
+      if (!value) return toast('Informe o valor', 'warning');
+
+      const btn = document.getElementById('btn-criar-link');
+      btn.disabled = true; btn.textContent = 'Criando...';
+      const resEl = document.getElementById('lp-resultado');
+      resEl.innerHTML = '';
+      try {
+        const link = await api.criarLinkPagamento({ name, billingType, chargeType, value, description: description||undefined, endDate: endDate||undefined, maxInstallmentCount, subscriptionCycle, contaId: cid||undefined });
+        const url = safeUrl(link.url);
+        resEl.innerHTML = `<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:14px">
+          <strong style="color:#166534">Link criado!</strong><br>
+          <span class="text-muted" style="font-size:13px">ID: ${esc(link.id)}</span>
+          ${url ? `<br><div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <a href="${esc(url)}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm">Abrir link</a>
+            <button class="btn btn-primary btn-sm" id="btn-copiar-link-novo" data-url="${esc(link.url)}">Copiar URL</button>
+          </div>` : ''}
+        </div>`;
+        toast('Link de pagamento criado!', 'success');
+        document.getElementById('btn-copiar-link-novo')?.addEventListener('click', (e) => {
+          navigator.clipboard.writeText(e.target.dataset.url).then(() => {
+            e.target.textContent = 'Copiado!';
+            setTimeout(() => { e.target.textContent = 'Copiar URL'; }, 2000);
+          });
+        });
+      } catch(e) {
+        resEl.innerHTML = `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:14px;color:#991b1b">${esc(e.message)}</div>`;
+        toast('Erro ao criar link: ' + e.message, 'error');
+      } finally {
+        btn.disabled = false; btn.textContent = 'Criar link';
+      }
+    });
+
+    if (abaAtiva === 'listagem') carregarLinks();
+  }
+
+  renderPagina();
+}
+
+// ── Página: Parcelamentos ─────────────────────────────────────────────────────
+async function pageParcelamentos() {
+  setTitle('Parcelamentos'); setActive('parcelamentos');
+  let instOffset = 0;
+
+  const badgeBillingType = t => {
+    if (t === 'PIX')    return '<span class="badge badge-refunded">PIX</span>';
+    if (t === 'BOLETO') return '<span class="badge badge-pending">Boleto</span>';
+    return `<span class="badge badge-cancelled">${esc(t)}</span>`;
+  };
+
+  async function carregarParcelamentos() {
+    const cid = getContaId();
+    try {
+      const data = await api.parcelamentos({ offset: instOffset, limit: 20, contaId: cid || undefined });
+      const rows = (data.data || []).map(inst => {
+        const valorTotal   = moeda(inst.value);
+        const valorParcela = inst.installmentCount ? moeda((inst.value||0) / inst.installmentCount) : '—';
+        return `<tr>
+          <td><span class="prv">${esc(inst.customerName || '—')}</span></td>
+          <td class="prv" style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(inst.description || '—')}</td>
+          <td><strong class="prv">${valorTotal}</strong></td>
+          <td class="prv">${valorParcela}</td>
+          <td>${inst.installmentCount || '—'}</td>
+          <td>${badgeBillingType(inst.billingType)}</td>
+          <td>${dataFmt(inst.dueDate)}</td>
+        </tr>`;
+      }).join('');
+      const total = data.totalCount || 0;
+      const pg = Math.floor(instOffset / 20) + 1;
+      const tp = Math.ceil(total / 20);
+      document.querySelector('#inst-content .card').innerHTML = `
+        <div class="card-header"><span class="card-title">${total} parcelamento(s)</span></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Cliente</th><th>Descrição</th><th>Total</th><th>Por parcela</th><th>Parcelas</th><th>Tipo</th><th>Início</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7"><div class="empty-state"><p>Nenhum parcelamento encontrado</p></div></td></tr>`}</tbody>
+        </table></div>
+        ${tp>1?`<div class="pagination"><span>Página ${pg} de ${tp}</span>
+          <button class="btn btn-secondary btn-sm" id="inst-prev" ${instOffset===0?'disabled':''}>Anterior</button>
+          <button class="btn btn-secondary btn-sm" id="inst-next" ${!data.hasMore?'disabled':''}>Próxima</button></div>`:''}`;
+      applyPrivacy();
+      document.getElementById('inst-prev')?.addEventListener('click', () => { instOffset = Math.max(0,instOffset-20); carregarParcelamentos(); });
+      document.getElementById('inst-next')?.addEventListener('click', () => { instOffset += 20; carregarParcelamentos(); });
+    } catch(e) {
+      if(e.message==='session')return;
+      document.querySelector('#inst-content .card').innerHTML = `<div class="card-body">${erroCard(e.message)}</div>`;
+    }
+  }
+
+  render(`
+    <div id="inst-content">
+      ${contaBar()}
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" id="inst-refresh">${svgRefresh()} Atualizar</button>
+      </div>
+      <div class="card"><div class="loading-overlay"><div class="skeleton" style="width:200px;height:20px"></div></div></div>
+    </div>`);
+  bindContaBar();
+  document.getElementById('inst-refresh').addEventListener('click', carregarParcelamentos);
+  await carregarParcelamentos();
+}
+
 // ── Página: Auditoria ─────────────────────────────────────────────────────────
 async function pageAuditoria() {
   setTitle('Auditoria de Segurança'); setActive('auditoria');
@@ -1949,6 +2393,9 @@ function route(){
     case'nova-cobranca':   return pageNovaCobranca();
     case'personalizacao':  return pagePersonalizacao();
     case'auditoria':       return pageAuditoria();
+    case'notas-fiscais':   return pageNotasFiscais();
+    case'links-pagamento': return pageLinksPagemento();
+    case'parcelamentos':   return pageParcelamentos();
     default:         return pageDashboard();
   }
 }

@@ -83,6 +83,16 @@ module.exports = {
     } catch { return null; }
   },
 
+  // Atualiza um pagamento existente no Asaas
+  async atualizarPagamento({ id, value, dueDate, description, apiKey }) {
+    const body = {};
+    if (value       !== undefined) body.value       = value;
+    if (dueDate     !== undefined) body.dueDate     = dueDate;
+    if (description !== undefined) body.description = description;
+    const { data } = await client(apiKey).put(`/payments/${id}`, body);
+    return data;
+  },
+
   // Cria um novo pagamento no Asaas
   async criarPagamento({ customer, billingType, value, dueDate, description, apiKey }) {
     const { data } = await client(apiKey).post('/payments', {
@@ -146,5 +156,54 @@ module.exports = {
       total: (pendentes.data.totalCount  || 0) + (pagos.data.totalCount  || 0) +
              (vencidos.data.totalCount   || 0) + (cancelados.data.totalCount || 0),
     };
+  },
+
+  // Saldo disponível
+  async getSaldo(apiKey) {
+    const { data } = await client(apiKey).get('/finance/balance');
+    return data; // { balance: number }
+  },
+
+  // Estatísticas de pagamentos (total recebido)
+  async getEstatisticasPagamentos(apiKey) {
+    const { data } = await client(apiKey).get('/finance/payment/statistics');
+    return data; // { quantity, value, netValue }
+  },
+
+  // Notas Fiscais (NFS-e)
+  async listarNotasFiscais({ status, offset = 0, limit = 50, apiKey } = {}) {
+    const params = { offset, limit };
+    if (status) params.status = status;
+    const { data } = await client(apiKey).get('/invoices', { params });
+    return data;
+  },
+
+  // Links de pagamento
+  async listarLinksPagamento({ offset = 0, limit = 50, apiKey } = {}) {
+    const { data } = await client(apiKey).get('/paymentLinks', { params: { offset, limit } });
+    return data;
+  },
+  async criarLinkPagamento({ name, billingType, chargeType, value, description, endDate, maxInstallmentCount, subscriptionCycle, apiKey }) {
+    const body = { name, billingType, chargeType, value };
+    if (description)         body.description         = description;
+    if (endDate)             body.endDate             = endDate;
+    if (maxInstallmentCount) body.maxInstallmentCount = maxInstallmentCount;
+    if (subscriptionCycle)   body.subscriptionCycle   = subscriptionCycle;
+    const { data } = await client(apiKey).post('/paymentLinks', body);
+    return data;
+  },
+
+  // Parcelamentos
+  async listarParcelamentos({ offset = 0, limit = 50, apiKey } = {}) {
+    const { data } = await client(apiKey).get('/installments', { params: { offset, limit } });
+    return data;
+  },
+  async getParcelamento(id, apiKey) {
+    const { data } = await client(apiKey).get(`/installments/${id}`);
+    return data;
+  },
+  async listarPagamentosParcelamento(id, apiKey) {
+    const { data } = await client(apiKey).get(`/installments/${id}/payments`);
+    return data;
   },
 };

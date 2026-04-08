@@ -65,6 +65,26 @@ router.get('/boletos/:id', async (req, res) => {
   }
 });
 
+router.put('/boletos/:id', async (req, res) => {
+  try {
+    const { contaId } = req.query;
+    const { value, dueDate, description } = req.body || {};
+    const { apiKey } = resolverConta(contaId);
+    const atualizado = await asaas.atualizarPagamento({
+      id: req.params.id,
+      value:       value       !== undefined ? Number(value) : undefined,
+      dueDate:     dueDate     || undefined,
+      description: description || undefined,
+      apiKey,
+    });
+    log.ok('Cobrança atualizada', { id: req.params.id });
+    res.json(atualizado);
+  } catch (e) {
+    log.error('Erro ao atualizar cobrança', { erro: e.message });
+    res.status(e.status || 502).json({ erro: e.response?.data?.errors?.[0]?.description || e.message });
+  }
+});
+
 router.get('/boletos/:id/pix', async (req, res) => {
   try {
     const { contaId } = req.query;
@@ -228,6 +248,97 @@ router.post('/email/enviar', emailLimiter, async (req, res) => {
   } catch (e) {
     log.error('Erro ao enviar email', { erro: e.message });
     res.status(e.status || 500).json({ erro: e.message });
+  }
+});
+
+// ── Saldo + Estatísticas ──────────────────────────────────────────────────────
+router.get('/saldo', async (req, res) => {
+  try {
+    const { contaId } = req.query;
+    const { apiKey } = resolverConta(contaId);
+    const [saldo, stats] = await Promise.all([
+      asaas.getSaldo(apiKey),
+      asaas.getEstatisticasPagamentos(apiKey),
+    ]);
+    res.json({ balance: saldo.balance, ...stats });
+  } catch (e) {
+    res.status(e.status || 502).json({ erro: e.message });
+  }
+});
+
+// ── Notas Fiscais ─────────────────────────────────────────────────────────────
+router.get('/notas-fiscais', async (req, res) => {
+  try {
+    const { contaId, status, offset, limit } = req.query;
+    const { apiKey } = resolverConta(contaId);
+    const data = await asaas.listarNotasFiscais({ status, offset: +offset || 0, limit: +limit || 50, apiKey });
+    // Enriquece com nome do cliente
+    if (data.data) {
+      await Promise.all(data.data.map(async nf => {
+        if (!nf.customerName && nf.customer) {
+          const cli = await asaas.getCliente(nf.customer, apiKey);
+          if (cli?.name) nf.customerName = cli.name;
+        }
+      }));
+    }
+    res.json(data);
+  } catch (e) {
+    res.status(e.status || 502).json({ erro: e.message });
+  }
+});
+
+// ── Links de Pagamento ────────────────────────────────────────────────────────
+router.get('/links-pagamento', async (req, res) => {
+  try {
+    const { contaId, offset, limit } = req.query;
+    const { apiKey } = resolverConta(contaId);
+    const data = await asaas.listarLinksPagamento({ offset: +offset || 0, limit: +limit || 50, apiKey });
+    res.json(data);
+  } catch (e) {
+    res.status(e.status || 502).json({ erro: e.message });
+  }
+});
+
+router.post('/links-pagamento', async (req, res) => {
+  try {
+    const { contaId, name, billingType, chargeType, value, description, endDate, maxInstallmentCount, subscriptionCycle } = req.body || {};
+    if (!name || !billingType || !chargeType || !value) {
+      return res.status(400).json({ erro: 'name, billingType, chargeType e value são obrigatórios' });
+    }
+    const { apiKey } = resolverConta(contaId);
+    const link = await asaas.criarLinkPagamento({ name, billingType, chargeType, value: Number(value), description, endDate, maxInstallmentCount: maxInstallmentCount ? Number(maxInstallmentCount) : undefined, subscriptionCycle, apiKey });
+    log.ok('Link de pagamento criado', { id: link.id, name });
+    res.json(link);
+  } catch (e) {
+    log.error('Erro ao criar link de pagamento', { erro: e.message });
+    res.status(e.status || 502).json({ erro: e.response?.data?.errors?.[0]?.description || e.message });
+  }
+});
+
+// ── Parcelamentos ─────────────────────────────────────────────────────────────
+router.get('/parcelamentos', async (req, res) => {
+  try {
+    const { contaId, offset, limit } = req.query;
+    const { apiKey } = resolverConta(contaId);
+    const data = await asaas.listarParcelamentos({ offset: +offset || 0, limit: +limit || 50, apiKey });
+    // Enriquece com nome do cliente via pagamentos do parcelamento
+    if (data.data) {
+      await Promise.all(data.data.map(async inst => {
+        try {
+          const pags = await asaas.listarPagamentosParcelamento(inst.id, apiKey);
+          const primeiro = pags?.data?.[0];
+          if (primeiro?.customer) {
+            const cli = await asaas.getCliente(primeiro.customer, apiKey);
+            inst.customerName = cli?.name || null;
+            inst.customerId   = primeiro.customer;
+            inst.dueDate      = primeiro.dueDate;
+          }
+        } catch {}
+      }));
+    }
+    res.json(data);
+  } catch (e) {
+    res.status(e.status || 502).json({ erro: e.message });
   }
 });
 
